@@ -1,6 +1,6 @@
 {
-  "name": "skald-node",
-  "version": "1.0.0",
+  "name": "@skald-labs/skald-node",
+  "version": "0.1.0",
   "description": "Node.js client library for the Skald API",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
