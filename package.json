@@ -1,0 +1,40 @@
+{
+  "name": "skald-node",
+  "version": "1.0.0",
+  "description": "Node.js client library for the Skald API",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:dev": "tsx src/test.ts"
+  },
+  "keywords": [
+    "skald",
+    "api",
+    "memo",
+    "client"
+  ],
+  "author": "Skald Labs, Inc.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skaldlabs/skald-node.git"
+  },
+  "bugs": {
+    "url": "https://github.com/skaldlabs/skald-node/issues"
+  },
+  "homepage": "https://github.com/skaldlabs/skald-node#readme"
+}
