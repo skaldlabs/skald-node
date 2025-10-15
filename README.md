@@ -1,11 +1,11 @@
-# skald-node
+# Skald Node SDK
 
 Node.js client library for the Skald API.
 
 ## Installation
 
 ```bash
-npm install skald-node
+npm install @skald-labs/skald-node
 ```
 
 ## Requirements
@@ -17,7 +17,7 @@ npm install skald-node
 ### Initialize the client
 
 ```javascript
-import { Skald } from 'skald-node';
+import { Skald } from '@skald-labs/skald-node';
 
 const skald = new Skald('your-api-key-here');
 ```
@@ -194,7 +194,7 @@ import {
   ChatResponse,
   ChatStreamEvent,
   StreamChatOptions
-} from 'skald-node';
+} from '@skald-labs/skald-node';
 
 const skald = new Skald('your-api-key-here');
 
