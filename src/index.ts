@@ -52,6 +52,23 @@ export interface ChatStreamEvent {
   content?: string;
 }
 
+export interface GenerateDocRequest {
+  prompt: string;
+  rules?: string;
+  stream?: boolean;
+}
+
+export interface GenerateDocResponse {
+  ok: boolean;
+  response: string;
+  intermediate_steps: any[];
+}
+
+export interface GenerateDocStreamEvent {
+  type: 'token' | 'done';
+  content?: string;
+}
+
 export interface SkaldConfig {
   apiKey: string;
   baseUrl?: string;
@@ -215,15 +232,13 @@ export class Skald {
    * 
    * @param chatParams - The chat parameters
    * @param chatParams.query - The question to ask (required)
-   * @param options - Streaming options
-   * @param options.streamToConsole - If true, automatically logs tokens to console as they arrive (default: false)
+
    * 
    * @returns AsyncGenerator yielding chat stream events (tokens and done event)
    * @throws Error if the API request fails with status code and error message
    * 
    * @example
    * ```typescript
-   * // Manual streaming
    * const stream = skald.streamedChat({
    *   query: 'What were the main points discussed in the Q1 meeting?'
    * });
@@ -236,17 +251,6 @@ export class Skald {
    *   }
    * }
    * 
-   * // Auto-streaming to console
-   * const stream2 = skald.streamedChat({
-   *   query: 'What are our quarterly goals?'
-   * }, { streamToConsole: true });
-   * 
-   * for await (const event of stream2) {
-   *   // Tokens are automatically logged, just wait for completion
-   *   if (event.type === 'done') {
-   *     console.log('Stream completed!');
-   *   }
-   * }
    * ```
    */
   async *streamedChat(
@@ -294,6 +298,141 @@ export class Skald {
             const data = line.slice(6);
             try {
               const event = JSON.parse(data) as ChatStreamEvent;
+              
+              yield event;
+              
+              if (event.type === 'done') {
+                return;
+              }
+            } catch (e) {
+              // Skip invalid JSON lines
+            }
+          }
+          // Skip ping lines (": ping") and empty lines
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  /**
+   * Generate documents based on prompts and retrieved context from the knowledge base (non-streaming).
+   * Similar to chat but optimized for document generation with optional style/format rules.
+   * 
+   * @param generateParams - The document generation parameters
+   * @param generateParams.prompt - The prompt for document generation (required)
+   * @param generateParams.rules - Optional style/format rules (e.g., "Use formal business language. Include sections for: Overview, Requirements")
+   * 
+   * @returns Promise resolving to generated document response
+   * @throws Error if the API request fails with status code and error message
+   * 
+   * @example
+   * ```typescript
+   * const result = await skald.generateDoc({
+   *   prompt: 'Create a product requirements document for a new mobile app',
+   *   rules: 'Use formal business language. Include sections for: Overview, Requirements, Technical Specifications, Timeline'
+   * });
+   * 
+   * console.log(result.response);
+   * ```
+   */
+  async generateDoc(generateParams: Omit<GenerateDocRequest, 'stream'>): Promise<GenerateDocResponse> {
+    const url = `${this.baseUrl}/api/v1/generate`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({
+        ...generateParams,
+        stream: false
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Skald API error (${response.status}): ${errorText}`);
+    }
+
+    return response.json() as Promise<GenerateDocResponse>;
+  }
+
+  /**
+   * Generate documents with streaming responses. Returns an async generator that yields tokens as they arrive.
+   * Similar to chat but optimized for document generation with optional style/format rules.
+   * 
+   * @param generateParams - The document generation parameters
+   * @param generateParams.prompt - The prompt for document generation (required)
+   * @param generateParams.rules - Optional style/format rules (e.g., "Use formal business language. Include sections for: Overview, Requirements")
+   * 
+   * @returns AsyncGenerator yielding document generation stream events (tokens and done event)
+   * @throws Error if the API request fails with status code and error message
+   * 
+   * @example
+   * ```typescript
+   * const stream = skald.streamedGenerateDoc({
+   *   prompt: 'Create a product requirements document for a new mobile app',
+   *   rules: 'Use formal business language. Include sections for: Overview, Requirements, Technical Specifications, Timeline'
+   * });
+   * 
+   * for await (const event of stream) {
+   *   if (event.type === 'token') {
+   *     process.stdout.write(event.content);
+   *   } else if (event.type === 'done') {
+   *     console.log('\nDone!');
+   *   }
+   * }
+   * 
+   * ```
+   */
+  async *streamedGenerateDoc(
+    generateParams: Omit<GenerateDocRequest, 'stream'>,
+  ): AsyncGenerator<GenerateDocStreamEvent> {
+    const url = `${this.baseUrl}/api/v1/generate`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({
+        ...generateParams,
+        stream: true
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Skald API error (${response.status}): ${errorText}`);
+    }
+
+    if (!response.body) {
+      throw new Error('Response body is null');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            try {
+              const event = JSON.parse(data) as GenerateDocStreamEvent;
               
               yield event;
               

@@ -164,6 +164,68 @@ Streaming responses yield events:
 - `{ type: 'token', content: string }` - Each text token as it's generated
 - `{ type: 'done' }` - Indicates the stream has finished
 
+### Generate Documents
+
+Generate documents based on prompts and retrieved context from your knowledge base. Similar to chat but optimized for document generation with optional style/format rules.
+
+#### Non-Streaming Document Generation
+
+```javascript
+const result = await skald.generateDoc({
+  prompt: 'Create a product requirements document for a new mobile app',
+  rules: 'Use formal business language. Include sections for: Overview, Requirements, Technical Specifications, Timeline'
+});
+
+console.log(result.response);
+// "# Product Requirements Document
+// 
+// ## Overview
+// This document outlines the requirements for...
+// 
+// ## Requirements
+// 1. User authentication [[1]]
+// 2. Push notifications [[2]]..."
+
+console.log(result.ok); // true
+```
+
+#### Streaming Document Generation
+
+For real-time document generation, use streaming:
+
+```javascript
+const stream = skald.streamedGenerateDoc({
+  prompt: 'Write a technical specification for user authentication',
+  rules: 'Include sections for: Architecture, Security, API Endpoints, Data Models'
+});
+
+for await (const event of stream) {
+  if (event.type === 'token') {
+    // Write each token as it arrives
+    process.stdout.write(event.content);
+  } else if (event.type === 'done') {
+    console.log('\nDone!');
+  }
+}
+```
+
+#### Generate Document Parameters
+
+- `prompt` (string, required) - The prompt describing what document to generate
+- `rules` (string, optional) - Optional style/format rules (e.g., "Use formal language. Include sections: X, Y, Z")
+- `project_id` (string, optional) - Project UUID (required when using Token Authentication)
+
+#### Generate Document Response
+
+Non-streaming responses include:
+- `ok` (boolean) - Success status
+- `response` (string) - The generated document with inline citations in format `[[N]]`
+- `intermediate_steps` (array) - Steps taken by the agent (for debugging)
+
+Streaming responses yield events:
+- `{ type: 'token', content: string }` - Each text token as it's generated
+- `{ type: 'done' }` - Indicates the stream has finished
+
 ### Error Handling
 
 ```javascript
@@ -193,7 +255,9 @@ import {
   ChatRequest,
   ChatResponse,
   ChatStreamEvent,
-  StreamChatOptions
+  GenerateDocRequest,
+  GenerateDocResponse,
+  GenerateDocStreamEvent
 } from '@skald-labs/skald-node';
 
 const skald = new Skald('your-api-key-here');
@@ -233,15 +297,24 @@ for await (const event of stream) {
   }
 }
 
-// Streaming chat with auto-console
-const options: StreamChatOptions = { streamToConsole: true };
-const autoStream = skald.streamedChat({
-  query: 'What are our quarterly goals?'
-}, options);
+// Generate document with types
+const generateDocResponse: GenerateDocResponse = await skald.generateDoc({
+  prompt: 'Create a product requirements document for a new mobile app',
+  rules: 'Use formal business language. Include sections for: Overview, Requirements'
+});
 
-for await (const event of autoStream) {
-  if (event.type === 'done') {
-    console.log('Done!');
+// Streaming document generation with types
+const docStream = skald.streamedGenerateDoc({
+  prompt: 'Write a technical specification',
+  rules: 'Include Architecture and Security sections'
+});
+
+for await (const event of docStream) {
+  const typedEvent: GenerateDocStreamEvent = event;
+  if (typedEvent.type === 'token') {
+    process.stdout.write(typedEvent.content || '');
+  } else if (typedEvent.type === 'done') {
+    console.log('\nDone!');
   }
 }
 ```
