@@ -239,6 +239,10 @@ export class Skald {
    * ```
    */
   async getMemo(memoId: string, idType: IdType = 'memo_uuid'): Promise<Memo> {
+    if (idType !== 'memo_uuid' && idType !== 'reference_id') {
+      throw new Error(`Invalid idType: ${idType}. Must be 'memo_uuid' or 'reference_id'.`);
+    }
+
     const url = new URL(`${this.baseUrl}/api/v1/memo/${encodeURIComponent(memoId)}`);
     if (idType !== 'memo_uuid') {
       url.searchParams.set('id_type', idType);
@@ -336,6 +340,10 @@ export class Skald {
     updateData: UpdateMemoData,
     idType: IdType = 'memo_uuid'
   ): Promise<UpdateMemoResponse> {
+    if (idType !== 'memo_uuid' && idType !== 'reference_id') {
+      throw new Error(`Invalid idType: ${idType}. Must be 'memo_uuid' or 'reference_id'.`);
+    }
+
     const url = new URL(`${this.baseUrl}/api/v1/memo/${encodeURIComponent(memoId)}`);
     if (idType !== 'memo_uuid') {
       url.searchParams.set('id_type', idType);
@@ -378,6 +386,10 @@ export class Skald {
    * ```
    */
   async deleteMemo(memoId: string, idType: IdType = 'memo_uuid'): Promise<void> {
+    if (idType !== 'memo_uuid' && idType !== 'reference_id') {
+      throw new Error(`Invalid idType: ${idType}. Must be 'memo_uuid' or 'reference_id'.`);
+    }
+
     const url = new URL(`${this.baseUrl}/api/v1/memo/${encodeURIComponent(memoId)}`);
     if (idType !== 'memo_uuid') {
       url.searchParams.set('id_type', idType);
