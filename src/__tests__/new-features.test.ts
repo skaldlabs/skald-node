@@ -367,7 +367,7 @@ describe('Skald Client - New Features', () => {
 
         const result = await skald.search({
           query: 'test',
-          search_method: 'title_contains',
+          search_method: 'chunk_semantic_search',
           filters: [
             {
               field: 'source',
@@ -399,7 +399,7 @@ describe('Skald Client - New Features', () => {
 
         await skald.search({
           query: 'test',
-          search_method: 'chunk_vector_search',
+          search_method: 'chunk_semantic_search',
           filters: [
             {
               field: 'source',
@@ -436,7 +436,7 @@ describe('Skald Client - New Features', () => {
 
         await skald.search({
           query: 'test',
-          search_method: 'title_contains',
+          search_method: 'chunk_semantic_search',
           filters: [
             {
               field: 'tags',
@@ -477,7 +477,7 @@ describe('Skald Client - New Features', () => {
           ],
         });
 
-        expect(result).toEqual(mockResponse);
+        expect(result).toEqual('Answer with citations [[1]]');
         const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
         expect(callBody.filters).toBeDefined();
         expect(callBody.filters).toHaveLength(1);
@@ -550,90 +550,6 @@ describe('Skald Client - New Features', () => {
       });
     });
 
-    describe('generateDoc with filters', () => {
-      it('should generate document with filters', async () => {
-        const mockResponse = {
-          ok: true,
-          response: 'Generated document',
-          intermediate_steps: [],
-        };
-
-        (global.fetch as jest.Mock).mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockResponse,
-        });
-
-        const result = await skald.generateDoc({
-          prompt: 'Create a document',
-          rules: 'Use formal language',
-          filters: [
-            {
-              field: 'source',
-              operator: 'in',
-              value: ['api-docs', 'specs'],
-              filter_type: 'native_field',
-            },
-            {
-              field: 'document_type',
-              operator: 'eq',
-              value: 'specification',
-              filter_type: 'custom_metadata',
-            },
-          ],
-        });
-
-        expect(result).toEqual(mockResponse);
-        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
-        expect(callBody.filters).toHaveLength(2);
-      });
-    });
-
-    describe('streamedGenerateDoc with filters', () => {
-      it('should stream generated document with filters', async () => {
-        const mockStreamData = `data: {"type":"token","content":"Generated"}\ndata: {"type":"done"}\n`;
-
-        const mockReader = {
-          read: jest
-            .fn()
-            .mockResolvedValueOnce({
-              done: false,
-              value: new TextEncoder().encode(mockStreamData),
-            })
-            .mockResolvedValueOnce({
-              done: true,
-              value: undefined,
-            }),
-          releaseLock: jest.fn(),
-        };
-
-        (global.fetch as jest.Mock).mockResolvedValueOnce({
-          ok: true,
-          body: {
-            getReader: () => mockReader,
-          },
-        });
-
-        const events = [];
-        for await (const event of skald.streamedGenerateDoc({
-          prompt: 'Create doc',
-          filters: [
-            {
-              field: 'tags',
-              operator: 'in',
-              value: ['product'],
-              filter_type: 'native_field',
-            },
-          ],
-        })) {
-          events.push(event);
-        }
-
-        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
-        expect(callBody.filters).toBeDefined();
-        expect(events).toHaveLength(2);
-      });
-    });
-
     describe('filter operators', () => {
       it('should support eq operator', async () => {
         (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -643,7 +559,7 @@ describe('Skald Client - New Features', () => {
 
         await skald.search({
           query: 'test',
-          search_method: 'title_contains',
+          search_method: 'chunk_semantic_search',
           filters: [
             {
               field: 'source',
@@ -666,7 +582,7 @@ describe('Skald Client - New Features', () => {
 
         await skald.search({
           query: 'test',
-          search_method: 'title_contains',
+          search_method: 'chunk_semantic_search',
           filters: [
             {
               field: 'title',
@@ -689,7 +605,7 @@ describe('Skald Client - New Features', () => {
 
         await skald.search({
           query: 'test',
-          search_method: 'title_contains',
+          search_method: 'chunk_semantic_search',
           filters: [
             {
               field: 'source',
