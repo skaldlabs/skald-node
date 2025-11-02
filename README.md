@@ -140,20 +140,18 @@ await skald.deleteMemo('external-id-123', 'reference_id');
 
 ### Search Memos
 
-Search through your memos using various search methods with optional filters:
+Search through your memos using semantic search. Returns :
 
 ```javascript
 // Basic semantic search
 const results = await skald.search({
   query: 'quarterly goals',
-  search_method: 'chunk_vector_search',
   limit: 10
 });
 
 // Search with filters
 const filtered = await skald.search({
   query: 'python tutorial',
-  search_method: 'title_contains',
   filters: [
     {
       field: 'source',
@@ -176,16 +174,10 @@ filtered.results.forEach(memo => {
 });
 ```
 
-#### Search Methods
-
-- **`chunk_vector_search`** - Semantic search on memo chunks for detailed content search
-- **`title_contains`** - Case-insensitive substring match on memo titles
-- **`title_startswith`** - Case-insensitive prefix match on memo titles
 
 #### Search Parameters
 
 - `query` (string, required) - The search query
-- `search_method` (SearchMethod, required) - One of the search methods above
 - `limit` (integer, optional) - Maximum results to return (1-50, default 10)
 - `filters` (array, optional) - Array of filter objects to narrow results (see Filters section below)
 
@@ -194,19 +186,21 @@ filtered.results.forEach(memo => {
 ```typescript
 interface SearchResponse {
   results: Array<{
-    uuid: string;
-    title: string;
-    summary: string;
+    memo_uuid: string;
+    chunk_uuid: string;
+    memo_title: string;
+    memo_summary: string;
     content_snippet: string;
     distance: number | null;
   }>;
 }
 ```
 
-- `uuid` - Unique identifier for the memo
-- `title` - Memo title
-- `summary` - Auto-generated summary for the memo
-- `content_snippet` - A snippet containing the beginning of the memo
+- `memo_uuid` - Unique identifier for the memo
+- `memo_uuid` - Unique identifier for the chunk
+- `memo_title` - Memo title
+- `memo_summary` - Auto-generated summary for the memo
+- `content_snippet` - A snippet containing the beginning of the chunk content. 
 - `distance` - A decimal from 0 to 2 determining how close the result was deemed to be to the query when using semantic search (`chunk_vector_search`). The closer to 0 the more related the content is to the query. `null` if using `title_contains` or `title_startswith`. 
 
 
@@ -418,7 +412,6 @@ When you provide multiple filters, they are combined with AND logic (all filters
 ```javascript
 const results = await skald.search({
   query: 'security best practices',
-  search_method: 'chunk_vector_search',
   filters: [
     {
       field: 'source',
@@ -518,7 +511,6 @@ import {
   FilterType,
   SearchRequest,
   SearchResponse,
-  SearchMethod,
   ChatRequest,
   ChatResponse,
   ChatStreamEvent,
@@ -577,7 +569,6 @@ const filters: Filter[] = [
 
 const searchRequest: SearchRequest = {
   query: 'quarterly goals',
-  search_method: 'chunk_vector_search' as SearchMethod,
   limit: 10,
   filters
 };

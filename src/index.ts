@@ -116,9 +116,10 @@ export interface SearchRequest {
 
 export interface SearchResponse {
   results: Array<{
-    uuid: string;
-    title: string;
-    summary: string;
+    memo_uuid: string;
+    chunk_uuid: string;
+    memo_title: string;
+    memo_summary: string;
     content_snippet: string;
     distance: number | null;
   }>;
