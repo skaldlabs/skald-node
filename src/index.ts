@@ -13,7 +13,7 @@ export interface MemoData {
 }
 
 export interface CreateMemoResponse {
-  ok: boolean;
+  memo_uuid: string;
 }
 
 export interface UpdateMemoData {
@@ -161,7 +161,7 @@ export class Skald {
    * @param memoData.tags - Optional array of tags for categorization and filtering
    * @param memoData.source - Optional source system name (max 255 characters, e.g., "notion", "confluence", "email")
    * 
-   * @returns Promise resolving to { ok: true } on success
+   * @returns Promise resolving to { memo_uuid: string } on success
    * @throws Error if the API request fails with status code and error message
    * 
    * @example
@@ -173,6 +173,7 @@ export class Skald {
    *   tags: ['meeting', 'q1'],
    *   source: 'notion'
    * });
+   * console.log(result.memo_uuid); // New UUID
    * ```
    */
   async createMemo(memoData: MemoData): Promise<CreateMemoResponse> {
@@ -411,201 +412,17 @@ export class Skald {
    *     {
    *       field: 'source',
    *       operator: 'eq',
-   *       value: 'notion',
-   *       filter_type: 'native_field'
-   *     },
-   *     {
-   *       field: 'level',
-   *       operator: 'eq',
-   *       value: 'beginner',
-   *       filter_type: 'custom_metadata'
-   *     }
-   *   ]
-   * });
-   * ```
+       value: 'notion',
+       filter_type: 'native_field'
+     },
+     {
+       field: 'level',
+       operator: 'eq',
+       value: 'beginner',
+       filter_type: 'custom_metadata'
+     }
+   ]
+ });
+ ```
    */
-  async search(searchParams: SearchRequest): Promise<SearchResponse> {
-    const url = `${this.baseUrl}/api/v1/search`;
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify(searchParams),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Skald API error (${response.status}): ${errorText}`);
-    }
-
-    return response.json() as Promise<SearchResponse>;
-  }
-
-  /**
-   * Ask questions about your knowledge base using an AI agent with optional filtering (non-streaming).
-   *
-   * @param chatParams - The chat parameters
-   * @param chatParams.query - The question to ask (required)
-   * @param chatParams.filters - Optional array of filters to narrow the search context
-   *
-   * @returns Promise resolving to the response text
-   * @throws Error if the API request fails with status code and error message
-   *
-   * @example
-   * ```typescript
-   * // Basic chat
-   * const result = await skald.chat({
-   *   query: 'What were the main points discussed in the Q1 meeting?'
-   * });
-   *
-   * // Chat with filters to focus on specific sources
-   * const filtered = await skald.chat({
-   *   query: 'What are our security practices?',
-   *   filters: [
-   *     {
-   *       field: 'source',
-   *       operator: 'eq',
-   *       value: 'security-docs',
-   *       filter_type: 'native_field'
-   *     },
-   *     {
-   *       field: 'tags',
-   *       operator: 'in',
-   *       value: ['security', 'compliance'],
-   *       filter_type: 'native_field'
-   *     }
-   *   ]
-   * });
-   *
-   * console.log(result);
-   * // "The main points discussed in the Q1 meeting were:
-   * // 1. Revenue targets [[1]]
-   * // 2. Hiring plans [[2]]"
-   * ```
-   */
-  async chat(chatParams: Omit<ChatRequest, 'stream'>): Promise<string> {
-    const url = `${this.baseUrl}/api/v1/chat`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify({
-        ...chatParams,
-        stream: false
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Skald API error (${response.status}): ${errorText}`);
-    }
-
-    const jsonResponse = await response.json() as ChatResponse;
-    return jsonResponse.response;
-  }
-
-  /**
-   * Ask questions about your knowledge base using an AI agent with streaming responses and optional filtering.
-   * Returns an async generator that yields tokens as they arrive.
-   *
-   * @param chatParams - The chat parameters
-   * @param chatParams.query - The question to ask (required)
-   * @param chatParams.filters - Optional array of filters to narrow the search context
-   *
-   * @returns AsyncGenerator yielding chat stream events (tokens and done event)
-   * @throws Error if the API request fails with status code and error message
-   *
-   * @example
-   * ```typescript
-   * const stream = skald.streamedChat({
-   *   query: 'What were the main points discussed in the Q1 meeting?',
-   *   filters: [
-   *     {
-   *       field: 'tags',
-   *       operator: 'in',
-   *       value: ['meeting', 'q1'],
-   *       filter_type: 'native_field'
-   *     }
-   *   ]
-   * });
-   *
-   * for await (const event of stream) {
-   *   if (event.type === 'token') {
-   *     process.stdout.write(event.content);
-   *   } else if (event.type === 'done') {
-   *     console.log('\nDone!');
-   *   }
-   * }
-   *
-   * ```
-   */
-  async *streamedChat(
-    chatParams: Omit<ChatRequest, 'stream'>,
-  ): AsyncGenerator<ChatStreamEvent> {
-    const url = `${this.baseUrl}/api/v1/chat`;
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify({
-        ...chatParams,
-        stream: true
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Skald API error (${response.status}): ${errorText}`);
-    }
-
-    if (!response.body) {
-      throw new Error('Response body is null');
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        
-        if (done) break;
-        
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            try {
-              const event = JSON.parse(data) as ChatStreamEvent;
-              
-              yield event;
-              
-              if (event.type === 'done') {
-                return;
-              }
-            } catch (e) {
-              // Skip invalid JSON lines
-            }
-          }
-          // Skip ping lines (": ping") and empty lines
-        }
-      }
-    } finally {
-      reader.releaseLock();
-    }
-  }
-
-}
+  async search(se

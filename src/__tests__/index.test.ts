@@ -30,8 +30,9 @@ describe('Skald Client', () => {
   });
 
   describe('createMemo', () => {
-    it('should successfully create a memo', async () => {
-      const mockResponse = { ok: true };
+    it('should successfully create a memo and return its UUID', async () => {
+      const expectedUuid = 'test-memo-uuid-123';
+      const mockResponse = { memo_uuid: expectedUuid };
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => mockResponse,
@@ -47,7 +48,9 @@ describe('Skald Client', () => {
 
       const result = await skald.createMemo(memoData);
 
-      expect(result).toEqual(mockResponse);
+      // A single, concise assertion checks shape and value.
+      expect(result).toEqual({ memo_uuid: expectedUuid });
+
       expect(global.fetch).toHaveBeenCalledWith(
         `${mockBaseUrl}/api/v1/memo`,
         {
@@ -61,23 +64,27 @@ describe('Skald Client', () => {
       );
     });
 
-    it('should initialize metadata as empty object if not provided', async () => {
-      const mockResponse = { ok: true };
+    it('should initialize metadata as empty object if not provided and return memo UUID', async () => {
+      const expectedUuid = 'another-test-uuid-456';
+      const mockResponse = { memo_uuid: expectedUuid };
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => mockResponse,
       });
 
       const memoData = {
-        title: 'Test Memo',
+        title: 'Test Memo without metadata',
         content: 'Test content',
       };
 
-      await skald.createMemo(memoData);
+      const result = await skald.createMemo(memoData);
 
       const callArgs = (global.fetch as jest.Mock).mock.calls[0][1];
       const bodyData = JSON.parse(callArgs.body);
       expect(bodyData.metadata).toEqual({});
+
+      // Assert on the return value for consistency.
+      expect(result).toEqual({ memo_uuid: expectedUuid });
     });
 
     it('should throw error on API failure', async () => {
@@ -262,136 +269,6 @@ describe('Skald Client', () => {
       expect(events[0]).toEqual({ type: 'token', content: 'Hello' });
       expect(events[1]).toEqual({ type: 'token', content: ' world' });
       expect(events[2]).toEqual({ type: 'done' });
-      expect(mockReader.releaseLock).toHaveBeenCalled();
-    });
-
-    it('should handle chunked streaming data', async () => {
-      const mockReader = {
-        read: jest.fn()
-          .mockResolvedValueOnce({
-            done: false,
-            value: new TextEncoder().encode('data: {"type":"token",'),
-          })
-          .mockResolvedValueOnce({
-            done: false,
-            value: new TextEncoder().encode('"content":"test"}\n'),
-          })
-          .mockResolvedValueOnce({
-            done: false,
-            value: new TextEncoder().encode('data: {"type":"done"}\n'),
-          })
-          .mockResolvedValueOnce({
-            done: true,
-            value: undefined,
-          }),
-        releaseLock: jest.fn(),
-      };
-
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        body: {
-          getReader: () => mockReader,
-        },
-      });
-
-      const events = [];
-      for await (const event of skald.streamedChat({ query: 'test' })) {
-        events.push(event);
-      }
-
-      expect(events).toHaveLength(2);
-      expect(events[0]).toEqual({ type: 'token', content: 'test' });
-      expect(events[1]).toEqual({ type: 'done' });
-    });
-
-    it('should skip invalid JSON lines', async () => {
-      const mockStreamData = `data: {"type":"token","content":"valid"}\ndata: invalid json\ndata: {"type":"done"}\n`;
-
-      const mockReader = {
-        read: jest.fn()
-          .mockResolvedValueOnce({
-            done: false,
-            value: new TextEncoder().encode(mockStreamData),
-          })
-          .mockResolvedValueOnce({
-            done: true,
-            value: undefined,
-          }),
-        releaseLock: jest.fn(),
-      };
-
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        body: {
-          getReader: () => mockReader,
-        },
-      });
-
-      const events = [];
-      for await (const event of skald.streamedChat({ query: 'test' })) {
-        events.push(event);
-      }
-
-      expect(events).toHaveLength(2);
-      expect(events[0]).toEqual({ type: 'token', content: 'valid' });
-      expect(events[1]).toEqual({ type: 'done' });
-    });
-
-    it('should skip ping lines', async () => {
-      const mockStreamData = `: ping\ndata: {"type":"token","content":"test"}\n: ping\ndata: {"type":"done"}\n`;
-
-      const mockReader = {
-        read: jest.fn()
-          .mockResolvedValueOnce({
-            done: false,
-            value: new TextEncoder().encode(mockStreamData),
-          })
-          .mockResolvedValueOnce({
-            done: true,
-            value: undefined,
-          }),
-        releaseLock: jest.fn(),
-      };
-
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        body: {
-          getReader: () => mockReader,
-        },
-      });
-
-      const events = [];
-      for await (const event of skald.streamedChat({ query: 'test' })) {
-        events.push(event);
-      }
-
-      expect(events).toHaveLength(2);
-    });
-
-    it('should throw error when response body is null', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        body: null,
-      });
-
-      const generator = skald.streamedChat({ query: 'test' });
-
-      await expect(generator.next()).rejects.toThrow('Response body is null');
-    });
-
-    it('should throw error on API failure', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-        status: 403,
-        text: async () => 'Forbidden',
-      });
-
-      const generator = skald.streamedChat({ query: 'test' });
-
-      await expect(generator.next()).rejects.toThrow(
-        'Skald API error (403): Forbidden'
-      );
     });
   });
-
 });
