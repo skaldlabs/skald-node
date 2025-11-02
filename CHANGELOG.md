@@ -1,6 +1,6 @@
 # Changelog
 
-# 0.2.0
+# 0.2.1
 
 - Removed `generate` and `streamedGenerate` methods
 - Removed `search_method` from search, now uses semantic search and is no longer configurable
