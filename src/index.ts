@@ -102,11 +102,9 @@ export interface Filter {
   filter_type: FilterType;
 }
 
-export type SearchMethod = 'chunk_semantic_search';
 
 export interface SearchRequest {
   query: string;
-  search_method: SearchMethod;
   limit?: number;
   filters?: Filter[];
 }
@@ -392,8 +390,6 @@ export class Skald {
    *
    * @param searchParams - The search parameters
    * @param searchParams.query - The search query string (required)
-   * @param searchParams.search_method - The search method to use (required):
-   *   - `chunk_semantic_search`: Semantic search on memo chunks for detailed content search
    * @param searchParams.limit - Maximum number of results to return (1-50, default 10)
    * @param searchParams.filters - Optional array of filters to narrow results
    *
@@ -405,14 +401,12 @@ export class Skald {
    * // Semantic search
    * const results = await skald.search({
    *   query: 'quarterly goals',
-   *   search_method: 'chunk_semantic_search',
    *   limit: 10,
    * });
    *
    * // Search with filters
    * const filtered = await skald.search({
    *   query: 'python tutorial',
-   *   search_method: 'chunk_semantic_search',
    *   filters: [
    *     {
    *       field: 'source',

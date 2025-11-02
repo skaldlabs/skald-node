@@ -367,7 +367,6 @@ describe('Skald Client - New Features', () => {
 
         const result = await skald.search({
           query: 'test',
-          search_method: 'chunk_semantic_search',
           filters: [
             {
               field: 'source',
@@ -399,7 +398,6 @@ describe('Skald Client - New Features', () => {
 
         await skald.search({
           query: 'test',
-          search_method: 'chunk_semantic_search',
           filters: [
             {
               field: 'source',
@@ -436,7 +434,6 @@ describe('Skald Client - New Features', () => {
 
         await skald.search({
           query: 'test',
-          search_method: 'chunk_semantic_search',
           filters: [
             {
               field: 'tags',
@@ -559,7 +556,6 @@ describe('Skald Client - New Features', () => {
 
         await skald.search({
           query: 'test',
-          search_method: 'chunk_semantic_search',
           filters: [
             {
               field: 'source',
@@ -582,7 +578,6 @@ describe('Skald Client - New Features', () => {
 
         await skald.search({
           query: 'test',
-          search_method: 'chunk_semantic_search',
           filters: [
             {
               field: 'title',
@@ -605,7 +600,6 @@ describe('Skald Client - New Features', () => {
 
         await skald.search({
           query: 'test',
-          search_method: 'chunk_semantic_search',
           filters: [
             {
               field: 'source',
