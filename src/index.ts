@@ -13,7 +13,7 @@ export interface MemoData {
 }
 
 export interface CreateMemoResponse {
-  ok: boolean;
+  memo_uuid: string;
 }
 
 export interface UpdateMemoData {
@@ -154,7 +154,7 @@ export class Skald {
 
   /**
    * Create a new memo. The memo will be automatically processed (summarized, chunked, and indexed for search).
-   * 
+   *
    * @param memoData - The memo creation parameters
    * @param memoData.title - The title of the memo (required, max 255 characters)
    * @param memoData.content - The full content/body of the memo (required)
@@ -162,10 +162,10 @@ export class Skald {
    * @param memoData.reference_id - Optional external reference ID (max 255 characters, used for linking Skald memos to IDs on your side)
    * @param memoData.tags - Optional array of tags for categorization and filtering
    * @param memoData.source - Optional source system name (max 255 characters, e.g., "notion", "confluence", "email")
-   * 
-   * @returns Promise resolving to { ok: true } on success
+   *
+   * @returns Promise resolving to { memo_uuid: string } containing the UUID of the created memo
    * @throws Error if the API request fails with status code and error message
-   * 
+   *
    * @example
    * ```typescript
    * const result = await skald.createMemo({
@@ -175,6 +175,7 @@ export class Skald {
    *   tags: ['meeting', 'q1'],
    *   source: 'notion'
    * });
+   * console.log(result.memo_uuid); // '550e8400-e29b-41d4-a716-446655440000'
    * ```
    */
   async createMemo(memoData: MemoData): Promise<CreateMemoResponse> {
