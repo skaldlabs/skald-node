@@ -246,6 +246,7 @@ for await (const event of stream) {
 #### Chat Parameters
 
 - `query` (string, required) - The question to ask
+- `system_prompt` (string, optional) - A system prompt to guide the AI's behavior
 - `filters` (array, optional) - Array of filter objects to focus chat context on specific sources (see Filters section below)
 - `project_id` (string, optional) - Project UUID (required when using Token Authentication)
 
