@@ -123,6 +123,7 @@ export interface SearchResponse {
 export interface ChatRequest {
   query: string;
   stream?: boolean;
+  system_prompt?: string;
   filters?: Filter[];
 }
 
@@ -450,6 +451,7 @@ export class Skald {
    *
    * @param chatParams - The chat parameters
    * @param chatParams.query - The question to ask (required)
+   * @param chatParams.system_prompt - Optional system prompt to guide the AI's behavior
    * @param chatParams.filters - Optional array of filters to narrow the search context
    *
    * @returns Promise resolving to the response text
@@ -465,6 +467,7 @@ export class Skald {
    * // Chat with filters to focus on specific sources
    * const filtered = await skald.chat({
    *   query: 'What are our security practices?',
+   *   system_prompt: 'You are a security expert. You are responsible for answering questions about our security practices.',
    *   filters: [
    *     {
    *       field: 'source',
@@ -517,6 +520,7 @@ export class Skald {
    *
    * @param chatParams - The chat parameters
    * @param chatParams.query - The question to ask (required)
+   * @param chatParams.system_prompt - Optional system prompt to guide the AI's behavior
    * @param chatParams.filters - Optional array of filters to narrow the search context
    *
    * @returns AsyncGenerator yielding chat stream events (tokens and done event)
@@ -526,6 +530,7 @@ export class Skald {
    * ```typescript
    * const stream = skald.streamedChat({
    *   query: 'What were the main points discussed in the Q1 meeting?',
+   *   system_prompt: 'You are a security expert. You are responsible for answering questions about our security practices.',
    *   filters: [
    *     {
    *       field: 'tags',

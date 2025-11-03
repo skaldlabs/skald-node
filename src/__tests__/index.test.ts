@@ -223,6 +223,135 @@ describe('Skald Client', () => {
         'Skald API error (401): Unauthorized'
       );
     });
+
+    it('should successfully send system_prompt parameter', async () => {
+      const mockResponse = {
+        ok: true,
+        response: 'Answer as security expert',
+        intermediate_steps: [],
+      };
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const chatParams = {
+        query: 'What are our security practices?',
+        system_prompt: 'You are a security expert. Answer questions about security practices.',
+      };
+
+      const result = await skald.chat(chatParams);
+
+      expect(result).toEqual('Answer as security expert');
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${mockBaseUrl}/api/v1/chat`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${mockApiKey}`,
+          },
+          body: JSON.stringify({
+            ...chatParams,
+            stream: false,
+          }),
+        }
+      );
+    });
+
+    it('should successfully send filters parameter', async () => {
+      const mockResponse = {
+        ok: true,
+        response: 'Filtered response',
+        intermediate_steps: [],
+      };
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const chatParams = {
+        query: 'What are our security practices?',
+        filters: [
+          {
+            field: 'source',
+            operator: 'eq' as const,
+            value: 'security-docs',
+            filter_type: 'native_field' as const,
+          },
+        ],
+      };
+
+      const result = await skald.chat(chatParams);
+
+      expect(result).toEqual('Filtered response');
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${mockBaseUrl}/api/v1/chat`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${mockApiKey}`,
+          },
+          body: JSON.stringify({
+            ...chatParams,
+            stream: false,
+          }),
+        }
+      );
+    });
+
+    it('should successfully send both system_prompt and filters', async () => {
+      const mockResponse = {
+        ok: true,
+        response: 'Filtered response with custom prompt',
+        intermediate_steps: [],
+      };
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const chatParams = {
+        query: 'What are our security practices?',
+        system_prompt: 'You are a security expert.',
+        filters: [
+          {
+            field: 'source',
+            operator: 'eq' as const,
+            value: 'security-docs',
+            filter_type: 'native_field' as const,
+          },
+          {
+            field: 'tags',
+            operator: 'in' as const,
+            value: ['security', 'compliance'],
+            filter_type: 'native_field' as const,
+          },
+        ],
+      };
+
+      const result = await skald.chat(chatParams);
+
+      expect(result).toEqual('Filtered response with custom prompt');
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${mockBaseUrl}/api/v1/chat`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${mockApiKey}`,
+          },
+          body: JSON.stringify({
+            ...chatParams,
+            stream: false,
+          }),
+        }
+      );
+    });
   });
 
   describe('streamedChat', () => {
@@ -390,6 +519,182 @@ describe('Skald Client', () => {
 
       await expect(generator.next()).rejects.toThrow(
         'Skald API error (403): Forbidden'
+      );
+    });
+
+    it('should successfully stream with system_prompt parameter', async () => {
+      const mockStreamData = `data: {"type":"token","content":"Security answer"}\ndata: {"type":"done"}\n`;
+
+      const mockReader = {
+        read: jest.fn()
+          .mockResolvedValueOnce({
+            done: false,
+            value: new TextEncoder().encode(mockStreamData),
+          })
+          .mockResolvedValueOnce({
+            done: true,
+            value: undefined,
+          }),
+        releaseLock: jest.fn(),
+      };
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        body: {
+          getReader: () => mockReader,
+        },
+      });
+
+      const chatParams = {
+        query: 'What are our security practices?',
+        system_prompt: 'You are a security expert.',
+      };
+
+      const events = [];
+      for await (const event of skald.streamedChat(chatParams)) {
+        events.push(event);
+      }
+
+      expect(events).toHaveLength(2);
+      expect(events[0]).toEqual({ type: 'token', content: 'Security answer' });
+      expect(events[1]).toEqual({ type: 'done' });
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${mockBaseUrl}/api/v1/chat`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${mockApiKey}`,
+          },
+          body: JSON.stringify({
+            ...chatParams,
+            stream: true,
+          }),
+        }
+      );
+    });
+
+    it('should successfully stream with filters parameter', async () => {
+      const mockStreamData = `data: {"type":"token","content":"Filtered result"}\ndata: {"type":"done"}\n`;
+
+      const mockReader = {
+        read: jest.fn()
+          .mockResolvedValueOnce({
+            done: false,
+            value: new TextEncoder().encode(mockStreamData),
+          })
+          .mockResolvedValueOnce({
+            done: true,
+            value: undefined,
+          }),
+        releaseLock: jest.fn(),
+      };
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        body: {
+          getReader: () => mockReader,
+        },
+      });
+
+      const chatParams = {
+        query: 'Search with filters',
+        filters: [
+          {
+            field: 'source',
+            operator: 'eq' as const,
+            value: 'documentation',
+            filter_type: 'native_field' as const,
+          },
+        ],
+      };
+
+      const events = [];
+      for await (const event of skald.streamedChat(chatParams)) {
+        events.push(event);
+      }
+
+      expect(events).toHaveLength(2);
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${mockBaseUrl}/api/v1/chat`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${mockApiKey}`,
+          },
+          body: JSON.stringify({
+            ...chatParams,
+            stream: true,
+          }),
+        }
+      );
+    });
+
+    it('should successfully stream with both system_prompt and filters', async () => {
+      const mockStreamData = `data: {"type":"token","content":"Expert"}\ndata: {"type":"token","content":" answer"}\ndata: {"type":"done"}\n`;
+
+      const mockReader = {
+        read: jest.fn()
+          .mockResolvedValueOnce({
+            done: false,
+            value: new TextEncoder().encode(mockStreamData),
+          })
+          .mockResolvedValueOnce({
+            done: true,
+            value: undefined,
+          }),
+        releaseLock: jest.fn(),
+      };
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        body: {
+          getReader: () => mockReader,
+        },
+      });
+
+      const chatParams = {
+        query: 'What are best practices?',
+        system_prompt: 'You are a technical expert.',
+        filters: [
+          {
+            field: 'source',
+            operator: 'eq' as const,
+            value: 'best-practices',
+            filter_type: 'native_field' as const,
+          },
+          {
+            field: 'verified',
+            operator: 'eq' as const,
+            value: 'true',
+            filter_type: 'custom_metadata' as const,
+          },
+        ],
+      };
+
+      const events = [];
+      for await (const event of skald.streamedChat(chatParams)) {
+        events.push(event);
+      }
+
+      expect(events).toHaveLength(3);
+      expect(events[0]).toEqual({ type: 'token', content: 'Expert' });
+      expect(events[1]).toEqual({ type: 'token', content: ' answer' });
+      expect(events[2]).toEqual({ type: 'done' });
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${mockBaseUrl}/api/v1/chat`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${mockApiKey}`,
+          },
+          body: JSON.stringify({
+            ...chatParams,
+            stream: true,
+          }),
+        }
       );
     });
   });
