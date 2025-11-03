@@ -42,7 +42,7 @@ const result = await skald.createMemo({
   expiration_date: '2024-12-31T23:59:59Z'
 });
 
-console.log(result); // { ok: true }
+console.log(result); // { memo_uuid: '550e8400-e29b-41d4-a716-446655440000' }
 ```
 
 **Required Fields:**

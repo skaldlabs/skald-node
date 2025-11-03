@@ -31,7 +31,7 @@ describe('Skald Client', () => {
 
   describe('createMemo', () => {
     it('should successfully create a memo', async () => {
-      const mockResponse = { ok: true };
+      const mockResponse = { memo_uuid: '550e8400-e29b-41d4-a716-446655440000' };
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => mockResponse,
@@ -48,6 +48,7 @@ describe('Skald Client', () => {
       const result = await skald.createMemo(memoData);
 
       expect(result).toEqual(mockResponse);
+      expect(result.memo_uuid).toBe('550e8400-e29b-41d4-a716-446655440000');
       expect(global.fetch).toHaveBeenCalledWith(
         `${mockBaseUrl}/api/v1/memo`,
         {
@@ -62,7 +63,7 @@ describe('Skald Client', () => {
     });
 
     it('should initialize metadata as empty object if not provided', async () => {
-      const mockResponse = { ok: true };
+      const mockResponse = { memo_uuid: '550e8400-e29b-41d4-a716-446655440001' };
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => mockResponse,
