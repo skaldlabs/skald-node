@@ -1,5 +1,9 @@
 # Changelog
 
+# 0.2.2
+
+- Updated the return type for `createMemo` -- now returns `{ "memo_uuid": <uuid> }`
+
 # 0.2.1
 
 - Removed `generate` and `streamedGenerate` methods
