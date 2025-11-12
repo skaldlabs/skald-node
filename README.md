@@ -57,6 +57,94 @@ console.log(result); // { memo_uuid: '550e8400-e29b-41d4-a716-446655440000' }
 - `source` (string, max 255 chars) - An indication from your side of the source of this content, useful when building integrations
 - `expiration_date` (string) - ISO 8601 timestamp for automatic memo expiration
 
+#### Create a Memo from File Upload
+
+Upload a document file (PDF, DOC, DOCX, PPTX) that will be processed asynchronously and converted into a memo:
+
+```javascript
+import * as fs from 'fs';
+
+const fileBuffer = fs.readFileSync('./document.pdf');
+
+const result = await skald.createMemoFromFile({
+  file: fileBuffer,
+  filename: 'document.pdf',
+  metadata: {
+    type: 'report',
+    department: 'engineering'
+  },
+  tags: ['report', '2024'],
+  source: 'google-drive',
+  reference_id: 'external-file-123'
+});
+
+console.log(result); // { ok: true, memo_uuid: '550e8400-e29b-41d4-a716-446655440000' }
+
+// Poll for processing status
+const status = await skald.checkMemoStatus(result.memo_uuid);
+console.log(status.status); // 'processing' | 'processed' | 'error'
+```
+
+**Supported File Types:**
+- PDF (.pdf)
+- Microsoft Word (.doc, .docx)
+- Microsoft PowerPoint (.pptx)
+- Maximum file size: 100MB
+
+**Required Fields:**
+- `file` (Buffer | Blob) - The file content
+- `filename` (string) - The name of the file including extension
+
+**Optional Fields:**
+- `reference_id` (string, max 255 chars) - Your external reference ID
+- `metadata` (object) - Custom JSON metadata
+- `tags` (array of strings) - Tags for categorization
+- `source` (string, max 255 chars) - Source system identifier
+
+**Note:** File processing is asynchronous. Use `checkMemoStatus()` to monitor the processing status.
+
+#### Check Memo Processing Status
+
+Monitor the processing status of a memo, especially useful after uploading files:
+
+```javascript
+// Check status by UUID
+const status = await skald.checkMemoStatus('550e8400-e29b-41d4-a716-446655440000');
+console.log(status.status); // 'processing' | 'processed' | 'error'
+
+if (status.status === 'error') {
+  console.error('Processing failed:', status.error_reason);
+}
+
+// Check by reference ID
+const status2 = await skald.checkMemoStatus('external-id-123', 'reference_id');
+
+// Poll until processing completes
+while (true) {
+  const status = await skald.checkMemoStatus(memoUuid);
+
+  if (status.status === 'processed') {
+    console.log('Processing complete!');
+    break;
+  } else if (status.status === 'error') {
+    console.error('Processing failed:', status.error_reason);
+    break;
+  }
+
+  // Wait 2 seconds before checking again
+  await new Promise(resolve => setTimeout(resolve, 2000));
+}
+```
+
+**Status Values:**
+- `processing` - The memo is currently being processed (parsed, summarized, chunked, indexed)
+- `processed` - Processing completed successfully, memo is ready to use
+- `error` - An error occurred during processing, check `error_reason` for details
+
+**Parameters:**
+- `memoId` (string, required) - The memo UUID or client reference ID
+- `idType` (string, optional) - Either `'memo_uuid'` or `'reference_id'` (default: `'memo_uuid'`)
+
 #### Get a Memo
 
 Retrieve a memo by its UUID or your reference ID:
@@ -502,6 +590,10 @@ import {
   Skald,
   MemoData,
   CreateMemoResponse,
+  MemoFileData,
+  CreateMemoFromFileResponse,
+  MemoStatus,
+  MemoStatusResponse,
   Memo,
   ListMemosResponse,
   UpdateMemoData,
@@ -551,6 +643,22 @@ const updateResponse: UpdateMemoResponse = await skald.updateMemo(
 
 // Delete memo
 await skald.deleteMemo('550e8400-e29b-41d4-a716-446655440000');
+
+// Upload a file
+import * as fs from 'fs';
+const fileBuffer = fs.readFileSync('./document.pdf');
+const fileData: MemoFileData = {
+  file: fileBuffer,
+  filename: 'document.pdf',
+  metadata: { type: 'report' },
+  tags: ['document'],
+  source: 'local'
+};
+const uploadResponse: CreateMemoFromFileResponse = await skald.createMemoFromFile(fileData);
+
+// Check processing status
+const statusResponse: MemoStatusResponse = await skald.checkMemoStatus(uploadResponse.memo_uuid);
+const status: MemoStatus = statusResponse.status; // 'processing' | 'processed' | 'error'
 
 // Search with filters and types
 const filters: Filter[] = [

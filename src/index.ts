@@ -16,6 +16,27 @@ export interface CreateMemoResponse {
   memo_uuid: string;
 }
 
+export interface MemoFileData {
+  file: Buffer | Blob;
+  filename: string;
+  reference_id?: string;
+  metadata?: Record<string, any>;
+  tags?: string[];
+  source?: string;
+}
+
+export interface CreateMemoFromFileResponse {
+  ok: boolean;
+  memo_uuid: string;
+}
+
+export type MemoStatus = 'processing' | 'processed' | 'error';
+
+export interface MemoStatusResponse {
+  status: MemoStatus;
+  error_reason?: string;
+}
+
 export interface UpdateMemoData {
   title?: string;
   content?: string;
@@ -613,6 +634,137 @@ export class Skald {
     } finally {
       reader.releaseLock();
     }
+  }
+
+  /**
+   * Create a memo from a file upload. Supports PDF, DOC, DOCX, and PPTX files up to 100MB.
+   * The file will be processed asynchronously and converted into a memo.
+   *
+   * @param fileData - The file upload parameters
+   * @param fileData.file - The file content as Buffer or Blob (required)
+   * @param fileData.filename - The name of the file including extension (required)
+   * @param fileData.reference_id - Optional external reference ID (max 255 characters)
+   * @param fileData.metadata - Optional custom JSON metadata
+   * @param fileData.tags - Optional array of tags for categorization
+   * @param fileData.source - Optional source system name (max 255 characters)
+   *
+   * @returns Promise resolving to { ok: true, memo_uuid: string } with the UUID for status tracking
+   * @throws Error if the API request fails with status code and error message
+   *
+   * @example
+   * ```typescript
+   * import * as fs from 'fs';
+   *
+   * const fileBuffer = fs.readFileSync('./document.pdf');
+   * const result = await skald.createMemoFromFile({
+   *   file: fileBuffer,
+   *   filename: 'document.pdf',
+   *   metadata: { type: 'report', department: 'engineering' },
+   *   tags: ['report', '2024'],
+   *   source: 'google-drive'
+   * });
+   * console.log(result.memo_uuid); // '550e8400-e29b-41d4-a716-446655440000'
+   *
+   * // Poll for processing status
+   * const status = await skald.checkMemoStatus(result.memo_uuid);
+   * console.log(status.status); // 'processing' | 'processed' | 'error'
+   * ```
+   */
+  async createMemoFromFile(fileData: MemoFileData): Promise<CreateMemoFromFileResponse> {
+    const url = `${this.baseUrl}/api/v1/memo/upload`;
+
+    const formData = new FormData();
+    formData.append('file', new Blob([fileData.file]), fileData.filename);
+
+    if (fileData.reference_id) {
+      formData.append('reference_id', fileData.reference_id);
+    }
+    if (fileData.metadata) {
+      formData.append('metadata', JSON.stringify(fileData.metadata));
+    }
+    if (fileData.tags) {
+      formData.append('tags', JSON.stringify(fileData.tags));
+    }
+    if (fileData.source) {
+      formData.append('source', fileData.source);
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Skald API error (${response.status}): ${errorText}`);
+    }
+
+    return response.json() as Promise<CreateMemoFromFileResponse>;
+  }
+
+  /**
+   * Check the processing status of a memo by UUID or reference ID.
+   * Use this to monitor asynchronous processing of uploaded files or created memos.
+   *
+   * @param memoId - The memo UUID or client reference ID
+   * @param idType - The type of identifier ('memo_uuid' or 'reference_id', default: 'memo_uuid')
+   *
+   * @returns Promise resolving to status response with processing state and optional error reason
+   * @throws Error if the API request fails with status code and error message
+   *
+   * @example
+   * ```typescript
+   * // Check status by UUID
+   * const status = await skald.checkMemoStatus('550e8400-e29b-41d4-a716-446655440000');
+   * console.log(status.status); // 'processing' | 'processed' | 'error'
+   *
+   * if (status.status === 'error') {
+   *   console.error('Processing failed:', status.error_reason);
+   * }
+   *
+   * // Check by reference ID
+   * const status2 = await skald.checkMemoStatus('my-ref-id', 'reference_id');
+   *
+   * // Poll until processing completes
+   * while (true) {
+   *   const status = await skald.checkMemoStatus(memoUuid);
+   *   if (status.status === 'processed') {
+   *     console.log('Processing complete!');
+   *     break;
+   *   } else if (status.status === 'error') {
+   *     console.error('Processing failed:', status.error_reason);
+   *     break;
+   *   }
+   *   await new Promise(resolve => setTimeout(resolve, 2000));
+   * }
+   * ```
+   */
+  async checkMemoStatus(memoId: string, idType: IdType = 'memo_uuid'): Promise<MemoStatusResponse> {
+    if (idType !== 'memo_uuid' && idType !== 'reference_id') {
+      throw new Error(`Invalid idType: ${idType}. Must be 'memo_uuid' or 'reference_id'.`);
+    }
+
+    const url = new URL(`${this.baseUrl}/api/v1/memo/${encodeURIComponent(memoId)}/status`);
+    if (idType !== 'memo_uuid') {
+      url.searchParams.set('id_type', idType);
+    }
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Skald API error (${response.status}): ${errorText}`);
+    }
+
+    return response.json() as Promise<MemoStatusResponse>;
   }
 
 }
