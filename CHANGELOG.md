@@ -1,5 +1,11 @@
 # Changelog
 
+# 0.3.0
+
+- Added `createMemoFromFile` supporting document uploads (PDFs, Power Points, Word documents)
+- Added `checkMemoStatus` to check if a memo has been fully processed
+- Update `chat` to respond with `ChatResponse` instead of a string
+
 # 0.2.2
 
 - Updated the return type for `createMemo` -- now returns `{ "memo_uuid": <uuid> }`
