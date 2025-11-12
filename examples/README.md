@@ -14,8 +14,6 @@ This directory contains example scripts demonstrating how to use the Skald Node.
    export SKALD_API_KEY=your_api_key_here
    ```
 
-3. For file upload examples, place a sample PDF file named `sample-document.pdf` in this directory.
-
 ## Examples
 
 ### 1. File Upload (`file-upload.ts`)

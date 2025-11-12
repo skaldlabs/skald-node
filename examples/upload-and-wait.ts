@@ -31,7 +31,7 @@ function sleep(ms: number): Promise<void> {
 async function uploadAndWaitForProcessing() {
   try {
     // Step 1: Upload the file
-    const filePath = path.join(__dirname, 'sample-document.pdf');
+    const filePath = path.join(__dirname, 'localcurrency-snippet.pdf');
 
     if (!fs.existsSync(filePath)) {
       console.error(`File not found: ${filePath}`);
