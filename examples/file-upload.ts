@@ -43,7 +43,7 @@ async function uploadFile() {
     const result = await skald.createMemoFromFile({
       file: fileBuffer,
       filename: filename,
-      title: 'Overcoming Economic Stagnation with Programmable Money (Snipet)',
+      title: 'Overcoming Economic Stagnation with Programmable Money (Snippet)',
       metadata: {
         uploadedAt: new Date().toISOString(),
       },
