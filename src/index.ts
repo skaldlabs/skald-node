@@ -513,7 +513,7 @@ export class Skald {
    * // 2. Hiring plans [[2]]"
    * ```
    */
-  async chat(chatParams: Omit<ChatRequest, 'stream'>): Promise<string> {
+  async chat(chatParams: Omit<ChatRequest, 'stream'>): Promise<ChatResponse> {
     const url = `${this.baseUrl}/api/v1/chat`;
 
     const response = await fetch(url, {
@@ -534,7 +534,7 @@ export class Skald {
     }
 
     const jsonResponse = await response.json() as ChatResponse;
-    return jsonResponse.response;
+    return jsonResponse;
   }
 
   /**

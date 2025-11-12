@@ -59,6 +59,23 @@ Features:
 - Status polling with timeout
 - Retrieving processed memo details
 
+### 4. Create Memo and Chat (`create-and-chat.ts`)
+
+Complete workflow demonstrating the full memo lifecycle:
+1. Creates a memo with text content
+2. Polls the status until processing completes
+3. Asks questions about the memo using the chat API
+
+```bash
+npx tsx examples/create-and-chat.ts
+```
+
+Features:
+- Creating memos with structured text content
+- Status polling with timeout
+- Asking multiple questions about processed memos
+- Using the chat API to query your knowledge base
+
 ## Supported File Types
 
 The Skald API supports the following file types:
