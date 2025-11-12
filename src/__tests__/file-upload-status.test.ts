@@ -36,7 +36,7 @@ describe('Skald Client - File Upload and Status Features', () => {
 
       expect(result).toEqual(mockResponse);
       expect(global.fetch).toHaveBeenCalledWith(
-        `${mockBaseUrl}/api/v1/memo/upload`,
+        `${mockBaseUrl}/api/v1/memo`,
         expect.objectContaining({
           method: 'POST',
           headers: {
