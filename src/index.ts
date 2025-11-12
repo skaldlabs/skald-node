@@ -19,6 +19,7 @@ export interface CreateMemoResponse {
 export interface MemoFileData {
   file: Buffer | Blob;
   filename: string;
+  title?: string;
   reference_id?: string;
   metadata?: Record<string, any>;
   tags?: string[];
@@ -642,6 +643,7 @@ export class Skald {
    *
    * @param fileData - The file upload parameters
    * @param fileData.file - The file content as Buffer or Blob (required)
+   * @param fileData.title - The title of the memo (optional, max 255 characters)
    * @param fileData.filename - The name of the file including extension (required)
    * @param fileData.reference_id - Optional external reference ID (max 255 characters)
    * @param fileData.metadata - Optional custom JSON metadata
@@ -671,11 +673,14 @@ export class Skald {
    * ```
    */
   async createMemoFromFile(fileData: MemoFileData): Promise<CreateMemoFromFileResponse> {
-    const url = `${this.baseUrl}/api/v1/memo/upload`;
+    const url = `${this.baseUrl}/api/v1/memo`;
 
     const formData = new FormData();
     formData.append('file', new Blob([fileData.file]), fileData.filename);
 
+    if (fileData.title) {
+      formData.append('title', fileData.title);
+    }
     if (fileData.reference_id) {
       formData.append('reference_id', fileData.reference_id);
     }

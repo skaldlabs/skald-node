@@ -9,7 +9,7 @@
  * - Have a file to upload (PDF, DOC, DOCX, or PPTX)
  */
 
-import { Skald } from '@skald-labs/skald-node';
+import { Skald } from '../src/index';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -24,7 +24,7 @@ const skald = new Skald(apiKey);
 async function uploadFile() {
   try {
     // Read the file from disk
-    const filePath = path.join(__dirname, 'sample-document.pdf');
+    const filePath = path.join(__dirname, 'localcurrency-snippet.pdf');
 
     // Check if file exists
     if (!fs.existsSync(filePath)) {
@@ -43,10 +43,9 @@ async function uploadFile() {
     const result = await skald.createMemoFromFile({
       file: fileBuffer,
       filename: filename,
+      title: 'Overcoming Economic Stagnation with Programmable Money (Snipet)',
       metadata: {
         uploadedAt: new Date().toISOString(),
-        department: 'engineering',
-        category: 'documentation'
       },
       tags: ['example', 'upload', 'pdf'],
       source: 'local-filesystem',

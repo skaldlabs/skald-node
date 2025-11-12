@@ -12,7 +12,7 @@
  * node examples/check-status.ts <memo-uuid>
  */
 
-import { Skald } from '@skald-labs/skald-node';
+import { Skald } from '../src/index';
 
 const apiKey = process.env.SKALD_API_KEY;
 if (!apiKey) {

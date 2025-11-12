@@ -11,7 +11,7 @@
  * - Have a file to upload (PDF, DOC, DOCX, or PPTX)
  */
 
-import { Skald } from '@skald-labs/skald-node';
+import { Skald } from '../src/index';
 import * as fs from 'fs';
 import * as path from 'path';
 
