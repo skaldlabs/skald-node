@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2
+
+- Fixed `ChatStreamEvent` type
+
 ## 0.3.1
 
 - Added support for the `chat_id` param on `chat` and `streamedChat`
