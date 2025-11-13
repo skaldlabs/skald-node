@@ -159,6 +159,7 @@ export interface ChatResponse {
 export interface ChatStreamEvent {
   type: 'token' | 'done';
   content?: string;
+  chat_id?: string;
 }
 
 export interface SkaldConfig {
