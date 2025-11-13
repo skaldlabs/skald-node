@@ -192,7 +192,7 @@ describe('Skald Client', () => {
 
       const result = await skald.chat(chatParams);
 
-      expect(result).toEqual('This is the answer');
+      expect(result).toEqual(mockResponse);
       expect(global.fetch).toHaveBeenCalledWith(
         `${mockBaseUrl}/api/v1/chat`,
         {
@@ -244,7 +244,7 @@ describe('Skald Client', () => {
 
       const result = await skald.chat(chatParams);
 
-      expect(result).toEqual('Answer as security expert');
+      expect(result).toEqual(mockResponse);
       expect(global.fetch).toHaveBeenCalledWith(
         `${mockBaseUrl}/api/v1/chat`,
         {
@@ -287,7 +287,7 @@ describe('Skald Client', () => {
 
       const result = await skald.chat(chatParams);
 
-      expect(result).toEqual('Filtered response');
+      expect(result).toEqual(mockResponse);
       expect(global.fetch).toHaveBeenCalledWith(
         `${mockBaseUrl}/api/v1/chat`,
         {
@@ -337,7 +337,7 @@ describe('Skald Client', () => {
 
       const result = await skald.chat(chatParams);
 
-      expect(result).toEqual('Filtered response with custom prompt');
+      expect(result).toEqual(mockResponse);
       expect(global.fetch).toHaveBeenCalledWith(
         `${mockBaseUrl}/api/v1/chat`,
         {

@@ -474,7 +474,7 @@ describe('Skald Client - New Features', () => {
           ],
         });
 
-        expect(result).toEqual('Answer with citations [[1]]');
+        expect(result).toEqual(mockResponse);
         const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
         expect(callBody.filters).toBeDefined();
         expect(callBody.filters).toHaveLength(1);
