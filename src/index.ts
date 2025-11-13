@@ -147,6 +147,7 @@ export interface ChatRequest {
   stream?: boolean;
   system_prompt?: string;
   filters?: Filter[];
+  chat_id?: string;
 }
 
 export interface ChatResponse {
@@ -474,6 +475,7 @@ export class Skald {
    *
    * @param chatParams - The chat parameters
    * @param chatParams.query - The question to ask (required)
+   * @param chatParams.chat_id - Optional chat ID to continue a conversation
    * @param chatParams.system_prompt - Optional system prompt to guide the AI's behavior
    * @param chatParams.filters - Optional array of filters to narrow the search context
    *
@@ -543,6 +545,7 @@ export class Skald {
    *
    * @param chatParams - The chat parameters
    * @param chatParams.query - The question to ask (required)
+   * @param chatParams.chat_id - Optional chat ID to continue a conversation
    * @param chatParams.system_prompt - Optional system prompt to guide the AI's behavior
    * @param chatParams.filters - Optional array of filters to narrow the search context
    *
