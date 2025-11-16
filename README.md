@@ -498,13 +498,6 @@ for await (const event of stream) {
 // }
 ```
 
-**Benefits of References:**
-
-- **Transparency**: Users can see exactly which sources the AI used
-- **Verification**: Users can click through to verify the AI's claims
-- **Trust**: Citations build confidence in the AI's responses
-- **Context**: Users can explore related content by following references
-
 
 ### Filters
 
