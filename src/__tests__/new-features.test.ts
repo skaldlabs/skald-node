@@ -885,6 +885,334 @@ describe('Skald Client - New Features', () => {
       });
     });
 
+    describe('references support', () => {
+      describe('chat with references', () => {
+        it('should return references object when enabled', async () => {
+          const mockResponse = {
+            ok: true,
+            response: 'The system uses API keys [[1]] and supports RBAC [[2]].',
+            intermediate_steps: [],
+            chat_id: 'chat-123',
+            references: {
+              '1': {
+                memo_uuid: '123e4567-e89b-12d3-a456-426614174000',
+                memo_title: 'API Authentication Guide',
+              },
+              '2': {
+                memo_uuid: '223e4567-e89b-12d3-a456-426614174001',
+                memo_title: 'Role-Based Access Control',
+              },
+            },
+          };
+
+          (global.fetch as jest.Mock).mockResolvedValueOnce({
+            ok: true,
+            json: async () => mockResponse,
+          });
+
+          const result = await skald.chat({
+            query: 'What is the main topic?',
+            rag_config: {
+              references: {
+                enabled: true,
+              },
+            },
+          });
+
+          expect(result.references).toBeDefined();
+          expect(result.references).toEqual(mockResponse.references);
+          expect(result.references!['1'].memo_uuid).toBe('123e4567-e89b-12d3-a456-426614174000');
+          expect(result.references!['1'].memo_title).toBe('API Authentication Guide');
+          expect(result.references!['2'].memo_uuid).toBe('223e4567-e89b-12d3-a456-426614174001');
+          expect(result.references!['2'].memo_title).toBe('Role-Based Access Control');
+          expect(result.response).toContain('[[1]]');
+          expect(result.response).toContain('[[2]]');
+        });
+
+        it('should not return references when disabled', async () => {
+          const mockResponse = {
+            ok: true,
+            response: 'Answer without references',
+            intermediate_steps: [],
+            chat_id: 'chat-123',
+          };
+
+          (global.fetch as jest.Mock).mockResolvedValueOnce({
+            ok: true,
+            json: async () => mockResponse,
+          });
+
+          const result = await skald.chat({
+            query: 'What is this?',
+            rag_config: {
+              references: {
+                enabled: false,
+              },
+            },
+          });
+
+          expect(result.references).toBeUndefined();
+        });
+
+        it('should not return references when rag_config is not provided', async () => {
+          const mockResponse = {
+            ok: true,
+            response: 'Answer',
+            intermediate_steps: [],
+            chat_id: 'chat-123',
+          };
+
+          (global.fetch as jest.Mock).mockResolvedValueOnce({
+            ok: true,
+            json: async () => mockResponse,
+          });
+
+          const result = await skald.chat({
+            query: 'What is this?',
+          });
+
+          expect(result.references).toBeUndefined();
+        });
+
+        it('should handle empty references object', async () => {
+          const mockResponse = {
+            ok: true,
+            response: 'Answer with no citations',
+            intermediate_steps: [],
+            chat_id: 'chat-123',
+            references: {},
+          };
+
+          (global.fetch as jest.Mock).mockResolvedValueOnce({
+            ok: true,
+            json: async () => mockResponse,
+          });
+
+          const result = await skald.chat({
+            query: 'What is this?',
+            rag_config: {
+              references: {
+                enabled: true,
+              },
+            },
+          });
+
+          expect(result.references).toBeDefined();
+          expect(result.references).toEqual({});
+          expect(Object.keys(result.references!)).toHaveLength(0);
+        });
+
+        it('should handle multiple references with same memo', async () => {
+          const mockResponse = {
+            ok: true,
+            response: 'Security includes audits [[1]], encryption [[2]], and MFA [[1]][[3]].',
+            intermediate_steps: [],
+            chat_id: 'chat-123',
+            references: {
+              '1': {
+                memo_uuid: '123e4567-e89b-12d3-a456-426614174000',
+                memo_title: 'Security Audit Procedures',
+              },
+              '2': {
+                memo_uuid: '223e4567-e89b-12d3-a456-426614174001',
+                memo_title: 'Data Encryption Standards',
+              },
+              '3': {
+                memo_uuid: '323e4567-e89b-12d3-a456-426614174002',
+                memo_title: 'Authentication Setup Guide',
+              },
+            },
+          };
+
+          (global.fetch as jest.Mock).mockResolvedValueOnce({
+            ok: true,
+            json: async () => mockResponse,
+          });
+
+          const result = await skald.chat({
+            query: 'What are security practices?',
+            rag_config: {
+              references: {
+                enabled: true,
+              },
+            },
+          });
+
+          expect(result.references).toBeDefined();
+          expect(Object.keys(result.references!)).toHaveLength(3);
+          expect(result.response).toContain('[[1]]');
+          expect(result.response).toContain('[[2]]');
+          expect(result.response).toContain('[[3]]');
+        });
+      });
+
+      describe('streamedChat with references', () => {
+        it('should emit references event when enabled', async () => {
+          const referencesData = {
+            '1': {
+              memo_uuid: '123e4567-e89b-12d3-a456-426614174000',
+              memo_title: 'API Authentication Guide',
+            },
+            '2': {
+              memo_uuid: '223e4567-e89b-12d3-a456-426614174001',
+              memo_title: 'Role-Based Access Control',
+            },
+          };
+
+          const mockStreamData =
+            `data: {"type":"token","content":"The system"}\n` +
+            `data: {"type":"token","content":" uses"}\n` +
+            `data: {"type":"token","content":" [[1]]"}\n` +
+            `data: {"type":"references","content":"${JSON.stringify(referencesData).replace(/"/g, '\\"')}"}\n` +
+            `data: {"type":"done","chat_id":"chat-123"}\n`;
+
+          const mockReader = {
+            read: jest
+              .fn()
+              .mockResolvedValueOnce({
+                done: false,
+                value: new TextEncoder().encode(mockStreamData),
+              })
+              .mockResolvedValueOnce({
+                done: true,
+                value: undefined,
+              }),
+            releaseLock: jest.fn(),
+          };
+
+          (global.fetch as jest.Mock).mockResolvedValueOnce({
+            ok: true,
+            body: {
+              getReader: () => mockReader,
+            },
+          });
+
+          const events = [];
+          for await (const event of skald.streamedChat({
+            query: 'What is the main topic?',
+            rag_config: {
+              references: {
+                enabled: true,
+              },
+            },
+          })) {
+            events.push(event);
+          }
+
+          expect(events).toHaveLength(5);
+          expect(events[0]).toEqual({ type: 'token', content: 'The system' });
+          expect(events[1]).toEqual({ type: 'token', content: ' uses' });
+          expect(events[2]).toEqual({ type: 'token', content: ' [[1]]' });
+          expect(events[3].type).toBe('references');
+          
+          // Parse and verify references content
+          const parsedReferences = JSON.parse(events[3].content!);
+          expect(parsedReferences).toEqual(referencesData);
+          expect(parsedReferences['1'].memo_uuid).toBe('123e4567-e89b-12d3-a456-426614174000');
+          expect(parsedReferences['1'].memo_title).toBe('API Authentication Guide');
+          
+          expect(events[4]).toEqual({ type: 'done', chat_id: 'chat-123' });
+        });
+
+        it('should not emit references event when disabled', async () => {
+          const mockStreamData =
+            `data: {"type":"token","content":"test"}\n` +
+            `data: {"type":"done","chat_id":"chat-123"}\n`;
+
+          const mockReader = {
+            read: jest
+              .fn()
+              .mockResolvedValueOnce({
+                done: false,
+                value: new TextEncoder().encode(mockStreamData),
+              })
+              .mockResolvedValueOnce({
+                done: true,
+                value: undefined,
+              }),
+            releaseLock: jest.fn(),
+          };
+
+          (global.fetch as jest.Mock).mockResolvedValueOnce({
+            ok: true,
+            body: {
+              getReader: () => mockReader,
+            },
+          });
+
+          const events = [];
+          for await (const event of skald.streamedChat({
+            query: 'test',
+            rag_config: {
+              references: {
+                enabled: false,
+              },
+            },
+          })) {
+            events.push(event);
+          }
+
+          expect(events).toHaveLength(2);
+          expect(events.every((e) => e.type !== 'references')).toBe(true);
+        });
+
+        it('should handle references event order correctly', async () => {
+          const referencesData = {
+            '1': {
+              memo_uuid: '123e4567-e89b-12d3-a456-426614174000',
+              memo_title: 'Test Memo',
+            },
+          };
+
+          // References should come after all tokens but before done
+          const mockStreamData =
+            `data: {"type":"token","content":"Token 1"}\n` +
+            `data: {"type":"token","content":"Token 2"}\n` +
+            `data: {"type":"references","content":"${JSON.stringify(referencesData).replace(/"/g, '\\"')}"}\n` +
+            `data: {"type":"done","chat_id":"chat-123"}\n`;
+
+          const mockReader = {
+            read: jest
+              .fn()
+              .mockResolvedValueOnce({
+                done: false,
+                value: new TextEncoder().encode(mockStreamData),
+              })
+              .mockResolvedValueOnce({
+                done: true,
+                value: undefined,
+              }),
+            releaseLock: jest.fn(),
+          };
+
+          (global.fetch as jest.Mock).mockResolvedValueOnce({
+            ok: true,
+            body: {
+              getReader: () => mockReader,
+            },
+          });
+
+          const events = [];
+          for await (const event of skald.streamedChat({
+            query: 'test',
+            rag_config: {
+              references: {
+                enabled: true,
+              },
+            },
+          })) {
+            events.push(event);
+          }
+
+          expect(events).toHaveLength(4);
+          expect(events[0].type).toBe('token');
+          expect(events[1].type).toBe('token');
+          expect(events[2].type).toBe('references');
+          expect(events[3].type).toBe('done');
+        });
+      });
+    });
+
     describe('rag_config edge cases', () => {
       it('should handle empty rag_config object', async () => {
         const mockResponse = {

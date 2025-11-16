@@ -379,15 +379,131 @@ for await (const event of followUpStream) {
 
 #### Chat Response
 
+**Non-Streaming Response:**
+
 Non-streaming responses include:
 - `ok` (boolean) - Success status
-- `response` (string) - The AI's answer with inline citations in format `[[N]]`
+- `response` (string) - The AI's answer with inline citations in format `[[N]]` (e.g., `[[1]]`, `[[2]]`)
 - `chat_id` (string) - Unique identifier for this conversation. Use this to continue the conversation with follow-up questions
 - `intermediate_steps` (array) - Steps taken by the agent (for debugging)
+- `references` (object, optional) - Mapping of citation numbers to memo information (only included when `rag_config.references.enabled` is `true`)
+
+**Streaming Response:**
 
 Streaming responses yield events:
 - `{ type: 'token', content: string }` - Each text token as it's generated
+- `{ type: 'references', content: string }` - JSON string containing the references object (only sent when `rag_config.references.enabled` is `true`)
 - `{ type: 'done', chat_id: string }` - Indicates the stream has finished and includes the chat_id for continuing the conversation
+
+#### Understanding References
+
+When you enable references in your RAG config (`rag_config.references.enabled: true`), the chat response will include inline citations and a references object that maps citation numbers to the source memos.
+
+**Citation Format:**
+
+The AI's response will include citations in the format `[[N]]` where N is a number (e.g., `[[1]]`, `[[2]]`, `[[3]]`). These citations appear inline in the response text to indicate which source memos support specific statements.
+
+**References Object Structure:**
+
+```typescript
+interface References {
+  [key: string]: {
+    memo_uuid: string;    // UUID of the referenced memo
+    memo_title: string;   // Title of the referenced memo
+  };
+}
+```
+
+**Non-Streaming Example with References:**
+
+```javascript
+const result = await skald.chat({
+  query: 'What is the main topic discussed in the documentation?',
+  rag_config: {
+    references: {
+      enabled: true
+    }
+  }
+});
+
+console.log(result.response);
+// "Based on the documentation, the main topic is about API authentication 
+// and authorization. The system uses API keys for authentication [[1]], 
+// and supports role-based access control [[2]]. For more details on 
+// implementation, see the security guide [[3]]."
+
+console.log(result.references);
+// {
+//   "1": {
+//     "memo_uuid": "123e4567-e89b-12d3-a456-426614174000",
+//     "memo_title": "API Authentication Guide"
+//   },
+//   "2": {
+//     "memo_uuid": "223e4567-e89b-12d3-a456-426614174001",
+//     "memo_title": "Role-Based Access Control"
+//   },
+//   "3": {
+//     "memo_uuid": "323e4567-e89b-12d3-a456-426614174002",
+//     "memo_title": "Security Best Practices"
+//   }
+// }
+```
+
+**Streaming Example with References:**
+
+```javascript
+let fullResponse = '';
+let references = {};
+
+const stream = skald.streamedChat({
+  query: 'What are our security best practices?',
+  rag_config: {
+    references: {
+      enabled: true
+    }
+  }
+});
+
+for await (const event of stream) {
+  if (event.type === 'token') {
+    // Accumulate response text with citations
+    fullResponse += event.content;
+    process.stdout.write(event.content);
+  } else if (event.type === 'references') {
+    // Parse references object
+    references = JSON.parse(event.content);
+    console.log('\nReferences:', references);
+  } else if (event.type === 'done') {
+    console.log('\nChat ID:', event.chat_id);
+  }
+}
+
+// Example output:
+// fullResponse: "Our security practices include regular audits [[1]], 
+// encryption at rest [[2]], and multi-factor authentication [[1]][[3]]."
+//
+// references: {
+//   "1": { 
+//     "memo_uuid": "123e4567-...", 
+//     "memo_title": "Security Audit Procedures" 
+//   },
+//   "2": { 
+//     "memo_uuid": "223e4567-...", 
+//     "memo_title": "Data Encryption Standards" 
+//   },
+//   "3": { 
+//     "memo_uuid": "323e4567-...", 
+//     "memo_title": "Authentication Setup Guide" 
+//   }
+// }
+```
+
+**Benefits of References:**
+
+- **Transparency**: Users can see exactly which sources the AI used
+- **Verification**: Users can click through to verify the AI's claims
+- **Trust**: Citations build confidence in the AI's responses
+- **Context**: Users can explore related content by following references
 
 
 ### Filters
@@ -884,7 +1000,9 @@ import {
   QueryRewriteConfig,
   VectorSearchConfig,
   RerankingConfig,
-  ReferencesConfig
+  ReferencesConfig,
+  MemoReference,
+  References
 } from '@skald-labs/skald-node';
 
 const skald = new Skald('your-api-key-here');
@@ -975,6 +1093,53 @@ for await (const event of stream) {
   const typedEvent: ChatStreamEvent = event;
   if (typedEvent.type === 'token') {
     process.stdout.write(typedEvent.content || '');
+  }
+}
+
+// Chat with references and types
+const chatWithRefs: ChatResponse = await skald.chat({
+  query: 'What are our security best practices?',
+  rag_config: {
+    references: {
+      enabled: true
+    }
+  }
+});
+
+console.log(chatWithRefs.response); // Response with [[1]], [[2]], etc.
+
+if (chatWithRefs.references) {
+  const refs: References = chatWithRefs.references;
+  Object.entries(refs).forEach(([num, ref]) => {
+    const memoRef: MemoReference = ref;
+    console.log(`[${num}] ${memoRef.memo_title} (${memoRef.memo_uuid})`);
+  });
+}
+
+// Streaming chat with references and types
+let fullResponse = '';
+let streamedRefs: References | undefined;
+
+const streamWithRefs = skald.streamedChat({
+  query: 'Explain our authentication system',
+  rag_config: {
+    references: {
+      enabled: true
+    }
+  }
+});
+
+for await (const event of streamWithRefs) {
+  const typedEvent: ChatStreamEvent = event;
+  
+  if (typedEvent.type === 'token') {
+    fullResponse += typedEvent.content || '';
+    process.stdout.write(typedEvent.content || '');
+  } else if (typedEvent.type === 'references') {
+    streamedRefs = JSON.parse(typedEvent.content || '{}') as References;
+    console.log('\nReferences received:', Object.keys(streamedRefs).length);
+  } else if (typedEvent.type === 'done') {
+    console.log('\nChat completed:', typedEvent.chat_id);
   }
 }
 

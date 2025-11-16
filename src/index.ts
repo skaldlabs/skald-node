@@ -195,15 +195,25 @@ export interface ChatRequest {
   rag_config?: RAGConfig;
 }
 
+export interface MemoReference {
+  memo_uuid: string;
+  memo_title: string;
+}
+
+export interface References {
+  [key: string]: MemoReference;
+}
+
 export interface ChatResponse {
   ok: boolean;
   response: string;
   intermediate_steps: any[];
   chat_id: string;
+  references?: References;
 }
 
 export interface ChatStreamEvent {
-  type: 'token' | 'done';
+  type: 'token' | 'done' | 'references';
   content?: string;
   chat_id?: string;
 }
