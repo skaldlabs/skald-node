@@ -619,4 +619,381 @@ describe('Skald Client - New Features', () => {
       });
     });
   });
+
+  describe('RAG config support', () => {
+    describe('chat with rag_config', () => {
+      it('should send rag_config with all properties', async () => {
+        const mockResponse = {
+          ok: true,
+          response: 'Answer with references [[1]]',
+          intermediate_steps: [],
+          chat_id: 'chat-123',
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        const result = await skald.chat({
+          query: 'What is this?',
+          rag_config: {
+            llmProvider: 'anthropic',
+            queryRewrite: {
+              enabled: true,
+            },
+            vectorSearch: {
+              topK: 150,
+              similarityThreshold: 0.7,
+            },
+            reranking: {
+              enabled: true,
+              topK: 30,
+            },
+            references: {
+              enabled: true,
+            },
+          },
+        });
+
+        expect(result).toEqual(mockResponse);
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.rag_config).toBeDefined();
+        expect(callBody.rag_config.llmProvider).toBe('anthropic');
+        expect(callBody.rag_config.queryRewrite.enabled).toBe(true);
+        expect(callBody.rag_config.vectorSearch.topK).toBe(150);
+        expect(callBody.rag_config.vectorSearch.similarityThreshold).toBe(0.7);
+        expect(callBody.rag_config.reranking.enabled).toBe(true);
+        expect(callBody.rag_config.reranking.topK).toBe(30);
+        expect(callBody.rag_config.references.enabled).toBe(true);
+      });
+
+      it('should send partial rag_config', async () => {
+        const mockResponse = {
+          ok: true,
+          response: 'Answer',
+          intermediate_steps: [],
+          chat_id: 'chat-123',
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.chat({
+          query: 'What is this?',
+          rag_config: {
+            llmProvider: 'openai',
+            reranking: {
+              enabled: false,
+              topK: 20,
+            },
+          },
+        });
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.rag_config).toBeDefined();
+        expect(callBody.rag_config.llmProvider).toBe('openai');
+        expect(callBody.rag_config.reranking.enabled).toBe(false);
+        expect(callBody.rag_config.reranking.topK).toBe(20);
+        expect(callBody.rag_config.queryRewrite).toBeUndefined();
+        expect(callBody.rag_config.vectorSearch).toBeUndefined();
+      });
+
+      it('should work without rag_config', async () => {
+        const mockResponse = {
+          ok: true,
+          response: 'Answer',
+          intermediate_steps: [],
+          chat_id: 'chat-123',
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.chat({
+          query: 'What is this?',
+        });
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.rag_config).toBeUndefined();
+      });
+
+      it('should combine rag_config with filters and system_prompt', async () => {
+        const mockResponse = {
+          ok: true,
+          response: 'Answer',
+          intermediate_steps: [],
+          chat_id: 'chat-123',
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.chat({
+          query: 'What are best practices?',
+          system_prompt: 'You are a helpful assistant.',
+          filters: [
+            {
+              field: 'source',
+              operator: 'eq',
+              value: 'docs',
+              filter_type: 'native_field',
+            },
+          ],
+          rag_config: {
+            llmProvider: 'groq',
+            vectorSearch: {
+              topK: 100,
+              similarityThreshold: 0.8,
+            },
+          },
+        });
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.query).toBe('What are best practices?');
+        expect(callBody.system_prompt).toBe('You are a helpful assistant.');
+        expect(callBody.filters).toHaveLength(1);
+        expect(callBody.rag_config).toBeDefined();
+        expect(callBody.rag_config.llmProvider).toBe('groq');
+      });
+
+      it('should support all LLM providers', async () => {
+        const mockResponse = {
+          ok: true,
+          response: 'Answer',
+          intermediate_steps: [],
+          chat_id: 'chat-123',
+        };
+
+        const providers: Array<'openai' | 'anthropic' | 'groq'> = ['openai', 'anthropic', 'groq'];
+
+        for (const provider of providers) {
+          (global.fetch as jest.Mock).mockResolvedValueOnce({
+            ok: true,
+            json: async () => mockResponse,
+          });
+
+          await skald.chat({
+            query: 'test',
+            rag_config: {
+              llmProvider: provider,
+            },
+          });
+
+          const calls = (global.fetch as jest.Mock).mock.calls;
+          const callBody = JSON.parse(calls[calls.length - 1][1].body);
+          expect(callBody.rag_config.llmProvider).toBe(provider);
+        }
+      });
+    });
+
+    describe('streamedChat with rag_config', () => {
+      it('should send rag_config with streaming', async () => {
+        const mockStreamData = `data: {"type":"token","content":"test"}\ndata: {"type":"done","chat_id":"chat-123"}\n`;
+
+        const mockReader = {
+          read: jest
+            .fn()
+            .mockResolvedValueOnce({
+              done: false,
+              value: new TextEncoder().encode(mockStreamData),
+            })
+            .mockResolvedValueOnce({
+              done: true,
+              value: undefined,
+            }),
+          releaseLock: jest.fn(),
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          body: {
+            getReader: () => mockReader,
+          },
+        });
+
+        const events = [];
+        for await (const event of skald.streamedChat({
+          query: 'test',
+          rag_config: {
+            llmProvider: 'anthropic',
+            queryRewrite: {
+              enabled: false,
+            },
+            vectorSearch: {
+              topK: 80,
+              similarityThreshold: 0.9,
+            },
+            reranking: {
+              enabled: true,
+              topK: 40,
+            },
+          },
+        })) {
+          events.push(event);
+        }
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.rag_config).toBeDefined();
+        expect(callBody.rag_config.llmProvider).toBe('anthropic');
+        expect(callBody.rag_config.queryRewrite.enabled).toBe(false);
+        expect(callBody.rag_config.vectorSearch.topK).toBe(80);
+        expect(callBody.stream).toBe(true);
+        expect(events).toHaveLength(2);
+      });
+
+      it('should stream without rag_config', async () => {
+        const mockStreamData = `data: {"type":"token","content":"test"}\ndata: {"type":"done"}\n`;
+
+        const mockReader = {
+          read: jest
+            .fn()
+            .mockResolvedValueOnce({
+              done: false,
+              value: new TextEncoder().encode(mockStreamData),
+            })
+            .mockResolvedValueOnce({
+              done: true,
+              value: undefined,
+            }),
+          releaseLock: jest.fn(),
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          body: {
+            getReader: () => mockReader,
+          },
+        });
+
+        const events = [];
+        for await (const event of skald.streamedChat({
+          query: 'test',
+        })) {
+          events.push(event);
+        }
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.rag_config).toBeUndefined();
+        expect(callBody.stream).toBe(true);
+      });
+    });
+
+    describe('rag_config edge cases', () => {
+      it('should handle empty rag_config object', async () => {
+        const mockResponse = {
+          ok: true,
+          response: 'Answer',
+          intermediate_steps: [],
+          chat_id: 'chat-123',
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.chat({
+          query: 'test',
+          rag_config: {},
+        });
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.rag_config).toEqual({});
+      });
+
+      it('should handle only references config', async () => {
+        const mockResponse = {
+          ok: true,
+          response: 'Answer [[1]]',
+          intermediate_steps: [],
+          chat_id: 'chat-123',
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.chat({
+          query: 'test',
+          rag_config: {
+            references: {
+              enabled: true,
+            },
+          },
+        });
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.rag_config.references.enabled).toBe(true);
+      });
+
+      it('should handle boundary values for vectorSearch', async () => {
+        const mockResponse = {
+          ok: true,
+          response: 'Answer',
+          intermediate_steps: [],
+          chat_id: 'chat-123',
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.chat({
+          query: 'test',
+          rag_config: {
+            vectorSearch: {
+              topK: 1,
+              similarityThreshold: 0.0,
+            },
+          },
+        });
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.rag_config.vectorSearch.topK).toBe(1);
+        expect(callBody.rag_config.vectorSearch.similarityThreshold).toBe(0.0);
+      });
+
+      it('should handle maximum boundary values', async () => {
+        const mockResponse = {
+          ok: true,
+          response: 'Answer',
+          intermediate_steps: [],
+          chat_id: 'chat-123',
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.chat({
+          query: 'test',
+          rag_config: {
+            vectorSearch: {
+              topK: 200,
+              similarityThreshold: 1.0,
+            },
+            reranking: {
+              enabled: true,
+              topK: 100,
+            },
+          },
+        });
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.rag_config.vectorSearch.topK).toBe(200);
+        expect(callBody.rag_config.vectorSearch.similarityThreshold).toBe(1.0);
+        expect(callBody.rag_config.reranking.topK).toBe(100);
+      });
+    });
+  });
 });

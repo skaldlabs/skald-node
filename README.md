@@ -373,6 +373,7 @@ for await (const event of followUpStream) {
 - `chat_id` (string, optional) - Chat ID to continue an existing conversation. When provided, the AI will have context from previous messages in the same conversation
 - `system_prompt` (string, optional) - A system prompt to guide the AI's behavior
 - `filters` (array, optional) - Array of filter objects to focus chat context on specific sources (see Filters section below)
+- `rag_config` (object, optional) - Advanced RAG (Retrieval-Augmented Generation) configuration to customize the search and retrieval behavior (see RAG Configuration section below)
 - `project_id` (string, optional) - Project UUID (required when using Token Authentication)
 
 
@@ -543,6 +544,296 @@ const doc = await skald.generateDoc({
 });
 ```
 
+### RAG Configuration
+
+The `rag_config` parameter allows you to customize the Retrieval-Augmented Generation (RAG) behavior for chat operations. This gives you fine-grained control over how documents are retrieved, ranked, and used to generate responses.
+
+#### RAG Config Structure
+
+```typescript
+interface RAGConfig {
+  llmProvider?: 'openai' | 'anthropic' | 'groq';
+  queryRewrite?: {
+    enabled: boolean;
+  };
+  vectorSearch?: {
+    topK: number;              // 1-200
+    similarityThreshold: number; // 0.0-1.0
+  };
+  reranking?: {
+    enabled: boolean;
+    topK: number;              // 1-100
+  };
+  references?: {
+    enabled: boolean;
+  };
+}
+```
+
+#### RAG Config Options
+
+**`llmProvider`** (string, optional)
+- Specifies which LLM provider to use for generating responses
+- Options: `'openai'`, `'anthropic'`, `'groq'`
+- Defaults to your project's configured provider
+
+**`queryRewrite`** (object, optional)
+- `enabled` (boolean) - Whether to rewrite the user's query for better retrieval
+- Query rewriting can improve search results by reformulating vague queries
+- Default: `false`
+
+**`vectorSearch`** (object, optional)
+- `topK` (number, 1-200) - How many chunks to retrieve from vector search
+- `similarityThreshold` (number, 0.0-1.0) - Minimum similarity score (0 = most similar)
+- Lower similarity thresholds are more restrictive
+- Default: `topK: 100`, `similarityThreshold: 0.8`
+
+**`reranking`** (object, optional)
+- `enabled` (boolean) - Whether to rerank search results for better relevance
+- `topK` (number, 1-100) - How many top results to keep after reranking (must be ≤ vectorSearch.topK)
+- Reranking uses a more sophisticated model to order results by relevance
+- Default: `enabled: true`, `topK: 50`
+
+**`references`** (object, optional)
+- `enabled` (boolean) - Whether to include inline citations in the response (e.g., `[[1]]`, `[[2]]`)
+- Default: `false`
+
+#### Basic RAG Config Examples
+
+**Enable References with Citations:**
+
+```javascript
+const result = await skald.chat({
+  query: 'What are our security best practices?',
+  rag_config: {
+    references: {
+      enabled: true
+    }
+  }
+});
+
+console.log(result.response);
+// "Our security practices include: 1) Regular audits [[1]], 
+// 2) Encryption at rest [[2]], and 3) Multi-factor authentication [[1]][[3]]"
+```
+
+**Customize Vector Search Parameters:**
+
+```javascript
+const result = await skald.chat({
+  query: 'Tell me about our product roadmap',
+  rag_config: {
+    vectorSearch: {
+      topK: 150,                  // Retrieve more chunks
+      similarityThreshold: 0.7    // Be less restrictive
+    },
+    reranking: {
+      enabled: true,
+      topK: 30                    // Keep top 30 after reranking
+    }
+  }
+});
+```
+
+**Use a Specific LLM Provider:**
+
+```javascript
+const result = await skald.chat({
+  query: 'Summarize our Q4 goals',
+  rag_config: {
+    llmProvider: 'anthropic',    // Use Claude
+    references: {
+      enabled: true
+    }
+  }
+});
+```
+
+**Enable Query Rewriting for Better Results:**
+
+```javascript
+const result = await skald.chat({
+  query: 'how do we handle that thing with customers?',  // Vague query
+  rag_config: {
+    queryRewrite: {
+      enabled: true  // AI will reformulate this into a clearer query
+    },
+    vectorSearch: {
+      topK: 100,
+      similarityThreshold: 0.8
+    }
+  }
+});
+```
+
+**Disable Reranking for Faster Responses:**
+
+```javascript
+const result = await skald.chat({
+  query: 'What is our company mission?',
+  rag_config: {
+    reranking: {
+      enabled: false,  // Skip reranking for faster response
+      topK: 50
+    }
+  }
+});
+```
+
+#### Advanced RAG Config Examples
+
+**Fine-tune All RAG Parameters:**
+
+```javascript
+const result = await skald.chat({
+  query: 'What security measures do we have in place?',
+  system_prompt: 'You are a security expert. Provide detailed, technical answers.',
+  rag_config: {
+    llmProvider: 'anthropic',
+    queryRewrite: {
+      enabled: true
+    },
+    vectorSearch: {
+      topK: 200,                  // Maximum retrieval
+      similarityThreshold: 0.6    // Cast a wider net
+    },
+    reranking: {
+      enabled: true,
+      topK: 50                    // Keep top 50 most relevant
+    },
+    references: {
+      enabled: true               // Include citations
+    }
+  },
+  filters: [
+    {
+      field: 'tags',
+      operator: 'in',
+      value: ['security', 'compliance'],
+      filter_type: 'native_field'
+    }
+  ]
+});
+```
+
+**Streaming Chat with RAG Config:**
+
+```javascript
+const stream = skald.streamedChat({
+  query: 'Explain our data processing pipeline',
+  rag_config: {
+    llmProvider: 'groq',        // Use Groq for fast streaming
+    vectorSearch: {
+      topK: 120,
+      similarityThreshold: 0.75
+    },
+    reranking: {
+      enabled: true,
+      topK: 40
+    },
+    references: {
+      enabled: true
+    }
+  }
+});
+
+for await (const event of stream) {
+  if (event.type === 'token') {
+    process.stdout.write(event.content);
+  } else if (event.type === 'done') {
+    console.log('\nChat ID:', event.chat_id);
+  }
+}
+```
+
+**Optimize for Precision (Narrow, Focused Results):**
+
+```javascript
+const result = await skald.chat({
+  query: 'What is the exact version number of our API?',
+  rag_config: {
+    vectorSearch: {
+      topK: 50,                   // Fewer chunks
+      similarityThreshold: 0.9    // Very strict matching
+    },
+    reranking: {
+      enabled: true,
+      topK: 10                    // Only keep top 10
+    }
+  }
+});
+```
+
+**Optimize for Recall (Broad, Comprehensive Results):**
+
+```javascript
+const result = await skald.chat({
+  query: 'Tell me everything about our customer onboarding process',
+  rag_config: {
+    vectorSearch: {
+      topK: 200,                  // Maximum chunks
+      similarityThreshold: 0.5    // More permissive
+    },
+    reranking: {
+      enabled: true,
+      topK: 80                    // Keep more results
+    }
+  }
+});
+```
+
+#### RAG Config Best Practices
+
+1. **Start with defaults**: The default settings work well for most use cases. Only customize when you have specific needs.
+
+2. **Enable references for transparency**: If you need to verify information or provide source attribution, enable `references.enabled: true`.
+
+3. **Balance topK values**: 
+   - Higher `vectorSearch.topK` = more comprehensive but slower
+   - Ensure `reranking.topK` ≤ `vectorSearch.topK`
+   - Typical range: vectorSearch 80-150, reranking 30-60
+
+4. **Adjust similarity threshold based on need**:
+   - Strict matching (0.9-1.0): Use when you need exact information
+   - Balanced (0.7-0.8): Good default for most queries
+   - Broad matching (0.5-0.6): Use for exploratory or vague queries
+
+5. **Use query rewriting for user-facing applications**: Enable `queryRewrite.enabled: true` when users might provide unclear or ambiguous queries.
+
+6. **Choose LLM provider based on requirements**:
+   - `anthropic` (Claude): Great for nuanced understanding and longer context
+   - `openai` (GPT): Fast and reliable for most use cases
+   - `groq`: Optimized for speed with streaming responses
+
+#### TypeScript Support for RAG Config
+
+```typescript
+import { Skald, RAGConfig, LLMProvider } from '@skald-labs/skald-node';
+
+const ragConfig: RAGConfig = {
+  llmProvider: 'anthropic' as LLMProvider,
+  queryRewrite: {
+    enabled: true
+  },
+  vectorSearch: {
+    topK: 150,
+    similarityThreshold: 0.75
+  },
+  reranking: {
+    enabled: true,
+    topK: 50
+  },
+  references: {
+    enabled: true
+  }
+};
+
+const result = await skald.chat({
+  query: 'What are our company values?',
+  rag_config: ragConfig
+});
+```
+
 ### Error Handling
 
 ```javascript
@@ -587,7 +878,13 @@ import {
   SearchResponse,
   ChatRequest,
   ChatResponse,
-  ChatStreamEvent
+  ChatStreamEvent,
+  RAGConfig,
+  LLMProvider,
+  QueryRewriteConfig,
+  VectorSearchConfig,
+  RerankingConfig,
+  ReferencesConfig
 } from '@skald-labs/skald-node';
 
 const skald = new Skald('your-api-key-here');

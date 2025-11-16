@@ -158,12 +158,41 @@ export interface SearchResponse {
   }>;
 }
 
+export type LLMProvider = 'openai' | 'anthropic' | 'groq';
+
+export interface QueryRewriteConfig {
+  enabled: boolean;
+}
+
+export interface VectorSearchConfig {
+  topK: number;
+  similarityThreshold: number;
+}
+
+export interface RerankingConfig {
+  enabled: boolean;
+  topK: number;
+}
+
+export interface ReferencesConfig {
+  enabled: boolean;
+}
+
+export interface RAGConfig {
+  llmProvider?: LLMProvider;
+  queryRewrite?: QueryRewriteConfig;
+  vectorSearch?: VectorSearchConfig;
+  reranking?: RerankingConfig;
+  references?: ReferencesConfig;
+}
+
 export interface ChatRequest {
   query: string;
   stream?: boolean;
   system_prompt?: string;
   filters?: Filter[];
   chat_id?: string;
+  rag_config?: RAGConfig;
 }
 
 export interface ChatResponse {
