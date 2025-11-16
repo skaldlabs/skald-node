@@ -154,6 +154,7 @@ export interface ChatResponse {
   ok: boolean;
   response: string;
   intermediate_steps: any[];
+  chat_id: string;
 }
 
 export interface ChatStreamEvent {

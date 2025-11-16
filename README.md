@@ -310,6 +310,16 @@ console.log(result.response);
 // 3. Product roadmap [[1]][[3]]"
 
 console.log(result.ok); // true
+console.log(result.chat_id); // '550e8400-e29b-41d4-a716-446655440000'
+
+// Continue the conversation by passing the chat_id
+const followUp = await skald.chat({
+  query: 'What were the revenue targets?',
+  chat_id: result.chat_id  // Maintains conversation context
+});
+
+console.log(followUp.response);
+// "Based on the Q1 meeting notes, the revenue targets were... [[1]]"
 ```
 
 #### Streaming Chat
@@ -317,6 +327,8 @@ console.log(result.ok); // true
 For real-time responses, use streaming chat:
 
 ```javascript
+let chatId;
+
 const stream = skald.streamedChat({
   query: 'What are our quarterly goals?'
 });
@@ -324,6 +336,22 @@ const stream = skald.streamedChat({
 for await (const event of stream) {
   if (event.type === 'token') {
     // Write each token as it arrives
+    process.stdout.write(event.content);
+  } else if (event.type === 'done') {
+    // Capture the chat_id for continuing the conversation
+    chatId = event.chat_id;
+    console.log('\nDone!');
+  }
+}
+
+// Continue the conversation with the captured chat_id
+const followUpStream = skald.streamedChat({
+  query: 'Can you elaborate on the first goal?',
+  chat_id: chatId  // Maintains conversation context
+});
+
+for await (const event of followUpStream) {
+  if (event.type === 'token') {
     process.stdout.write(event.content);
   } else if (event.type === 'done') {
     console.log('\nDone!');
@@ -334,6 +362,7 @@ for await (const event of stream) {
 #### Chat Parameters
 
 - `query` (string, required) - The question to ask
+- `chat_id` (string, optional) - Chat ID to continue an existing conversation. When provided, the AI will have context from previous messages in the same conversation
 - `system_prompt` (string, optional) - A system prompt to guide the AI's behavior
 - `filters` (array, optional) - Array of filter objects to focus chat context on specific sources (see Filters section below)
 - `project_id` (string, optional) - Project UUID (required when using Token Authentication)
@@ -344,11 +373,12 @@ for await (const event of stream) {
 Non-streaming responses include:
 - `ok` (boolean) - Success status
 - `response` (string) - The AI's answer with inline citations in format `[[N]]`
+- `chat_id` (string) - Unique identifier for this conversation. Use this to continue the conversation with follow-up questions
 - `intermediate_steps` (array) - Steps taken by the agent (for debugging)
 
 Streaming responses yield events:
 - `{ type: 'token', content: string }` - Each text token as it's generated
-- `{ type: 'done' }` - Indicates the stream has finished
+- `{ type: 'done', chat_id: string }` - Indicates the stream has finished and includes the chat_id for continuing the conversation
 
 
 ### Filters
