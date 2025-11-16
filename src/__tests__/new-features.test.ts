@@ -39,7 +39,7 @@ describe('Skald Client - New Features', () => {
         json: async () => mockMemo,
       });
 
-      const result = await skald.getMemo('test-uuid');
+      const result = await skald.getMemo({ memoId: 'test-uuid' });
 
       expect(result).toEqual(mockMemo);
       expect(global.fetch).toHaveBeenCalledWith(
@@ -78,7 +78,7 @@ describe('Skald Client - New Features', () => {
         json: async () => mockMemo,
       });
 
-      const result = await skald.getMemo('ref-123', 'reference_id');
+      const result = await skald.getMemo({ memoId: 'ref-123', idType: 'reference_id' });
 
       expect(result).toEqual(mockMemo);
       const callUrl = (global.fetch as jest.Mock).mock.calls[0][0];
@@ -111,7 +111,7 @@ describe('Skald Client - New Features', () => {
         json: async () => mockMemo,
       });
 
-      await skald.getMemo('ref/with/slashes', 'reference_id');
+      await skald.getMemo({ memoId: 'ref/with/slashes', idType: 'reference_id' });
 
       const callUrl = (global.fetch as jest.Mock).mock.calls[0][0];
       expect(callUrl).toContain('ref%2Fwith%2Fslashes');
@@ -124,7 +124,7 @@ describe('Skald Client - New Features', () => {
         text: async () => 'Memo not found',
       });
 
-      await expect(skald.getMemo('nonexistent')).rejects.toThrow(
+      await expect(skald.getMemo({ memoId: 'nonexistent' })).rejects.toThrow(
         'Skald API error (404): Memo not found'
       );
     });
@@ -216,7 +216,7 @@ describe('Skald Client - New Features', () => {
         metadata: { status: 'reviewed' },
       };
 
-      const result = await skald.updateMemo('test-uuid', updateData);
+      const result = await skald.updateMemo({ memoId: 'test-uuid', updateData });
 
       expect(result).toEqual(mockResponse);
       expect(global.fetch).toHaveBeenCalledWith(
@@ -244,7 +244,7 @@ describe('Skald Client - New Features', () => {
         content: 'New content',
       };
 
-      await skald.updateMemo('ref-123', updateData, 'reference_id');
+      await skald.updateMemo({ memoId: 'ref-123', updateData, idType: 'reference_id' });
 
       const callUrl = (global.fetch as jest.Mock).mock.calls[0][0];
       expect(callUrl).toContain('id_type=reference_id');
@@ -268,7 +268,7 @@ describe('Skald Client - New Features', () => {
         expiration_date: '2025-12-31T23:59:59Z',
       };
 
-      await skald.updateMemo('test-uuid', updateData);
+      await skald.updateMemo({ memoId: 'test-uuid', updateData });
 
       const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
       expect(callBody).toEqual(updateData);
@@ -282,7 +282,7 @@ describe('Skald Client - New Features', () => {
       });
 
       await expect(
-        skald.updateMemo('test-uuid', { title: 'New' })
+        skald.updateMemo({ memoId: 'test-uuid', updateData: { title: 'New' } })
       ).rejects.toThrow('Skald API error (403): Access denied');
     });
   });
@@ -294,8 +294,9 @@ describe('Skald Client - New Features', () => {
         status: 204,
       });
 
-      await skald.deleteMemo('test-uuid');
+      const result = await skald.deleteMemo({ memoId: 'test-uuid' });
 
+      expect(result).toEqual({ ok: true });
       expect(global.fetch).toHaveBeenCalledWith(
         `${mockBaseUrl}/api/v1/memo/test-uuid`,
         {
@@ -313,8 +314,9 @@ describe('Skald Client - New Features', () => {
         status: 204,
       });
 
-      await skald.deleteMemo('ref-123', 'reference_id');
+      const result = await skald.deleteMemo({ memoId: 'ref-123', idType: 'reference_id' });
 
+      expect(result).toEqual({ ok: true });
       const callUrl = (global.fetch as jest.Mock).mock.calls[0][0];
       expect(callUrl).toContain('id_type=reference_id');
       expect(callUrl).toContain('/api/v1/memo/ref-123');
@@ -327,7 +329,7 @@ describe('Skald Client - New Features', () => {
         text: async () => 'Memo not found',
       });
 
-      await expect(skald.deleteMemo('nonexistent')).rejects.toThrow(
+      await expect(skald.deleteMemo({ memoId: 'nonexistent' })).rejects.toThrow(
         'Skald API error (404): Memo not found'
       );
     });
@@ -339,7 +341,7 @@ describe('Skald Client - New Features', () => {
         text: async () => 'Resource does not belong to the project',
       });
 
-      await expect(skald.deleteMemo('test-uuid')).rejects.toThrow(
+      await expect(skald.deleteMemo({ memoId: 'test-uuid' })).rejects.toThrow(
         'Skald API error (403): Resource does not belong to the project'
       );
     });

@@ -81,7 +81,7 @@ const result = await skald.createMemoFromFile({
 console.log(result); // { ok: true, memo_uuid: '550e8400-e29b-41d4-a716-446655440000' }
 
 // Poll for processing status
-const status = await skald.checkMemoStatus(result.memo_uuid);
+const status = await skald.checkMemoStatus({ memoId: result.memo_uuid });
 console.log(status.status); // 'processing' | 'processed' | 'error'
 ```
 
@@ -109,7 +109,7 @@ Monitor the processing status of a memo, especially useful after uploading files
 
 ```javascript
 // Check status by UUID
-const status = await skald.checkMemoStatus('550e8400-e29b-41d4-a716-446655440000');
+const status = await skald.checkMemoStatus({ memoId: '550e8400-e29b-41d4-a716-446655440000' });
 console.log(status.status); // 'processing' | 'processed' | 'error'
 
 if (status.status === 'error') {
@@ -117,11 +117,11 @@ if (status.status === 'error') {
 }
 
 // Check by reference ID
-const status2 = await skald.checkMemoStatus('external-id-123', 'reference_id');
+const status2 = await skald.checkMemoStatus({ memoId: 'external-id-123', idType: 'reference_id' });
 
 // Poll until processing completes
 while (true) {
-  const status = await skald.checkMemoStatus(memoUuid);
+  const status = await skald.checkMemoStatus({ memoId: memoUuid });
 
   if (status.status === 'processed') {
     console.log('Processing complete!');
@@ -142,6 +142,7 @@ while (true) {
 - `error` - An error occurred during processing, check `error_reason` for details
 
 **Parameters:**
+Takes a request object with the following properties:
 - `memoId` (string, required) - The memo UUID or client reference ID
 - `idType` (string, optional) - Either `'memo_uuid'` or `'reference_id'` (default: `'memo_uuid'`)
 
@@ -151,10 +152,10 @@ Retrieve a memo by its UUID or your reference ID:
 
 ```javascript
 // Get by UUID
-const memo = await skald.getMemo('550e8400-e29b-41d4-a716-446655440000');
+const memo = await skald.getMemo({ memoId: '550e8400-e29b-41d4-a716-446655440000' });
 
 // Get by reference ID
-const memo = await skald.getMemo('external-id-123', 'reference_id');
+const memo = await skald.getMemo({ memoId: 'external-id-123', idType: 'reference_id' });
 
 console.log(memo.title);
 console.log(memo.content);
@@ -191,15 +192,22 @@ Update an existing memo by UUID or reference ID:
 
 ```javascript
 // Update by UUID
-await skald.updateMemo('550e8400-e29b-41d4-a716-446655440000', {
-  title: 'Updated Title',
-  metadata: { status: 'reviewed' }
+await skald.updateMemo({
+  memoId: '550e8400-e29b-41d4-a716-446655440000',
+  updateData: {
+    title: 'Updated Title',
+    metadata: { status: 'reviewed' }
+  }
 });
 
 // Update by reference ID and trigger reprocessing
-await skald.updateMemo('external-id-123', {
-  content: 'New content that will be reprocessed'
-}, 'reference_id');
+await skald.updateMemo({
+  memoId: 'external-id-123',
+  updateData: {
+    content: 'New content that will be reprocessed'
+  },
+  idType: 'reference_id'
+});
 ```
 
 **Note:** When you update the `content` field, the memo will be automatically reprocessed (summary, tags, and chunks regenerated).
@@ -218,10 +226,10 @@ Permanently delete a memo and all associated data:
 
 ```javascript
 // Delete by UUID
-await skald.deleteMemo('550e8400-e29b-41d4-a716-446655440000');
+await skald.deleteMemo({ memoId: '550e8400-e29b-41d4-a716-446655440000' });
 
 // Delete by reference ID
-await skald.deleteMemo('external-id-123', 'reference_id');
+await skald.deleteMemo({ memoId: 'external-id-123', idType: 'reference_id' });
 ```
 
 **Warning:** This operation permanently deletes the memo and all related data (content, summary, tags, chunks) and cannot be undone.
@@ -566,7 +574,12 @@ import {
   ListMemosResponse,
   UpdateMemoData,
   UpdateMemoResponse,
+  DeleteMemoResponse,
   IdType,
+  GetMemoRequest,
+  UpdateMemoRequest,
+  DeleteMemoRequest,
+  CheckMemoStatusRequest,
   Filter,
   FilterOperator,
   FilterType,
@@ -590,8 +603,8 @@ const memoData: MemoData = {
 const createResponse: CreateMemoResponse = await skald.createMemo(memoData);
 
 // Get memo with types
-const memo: Memo = await skald.getMemo('550e8400-e29b-41d4-a716-446655440000');
-const memoByRef: Memo = await skald.getMemo('external-id-123', 'reference_id' as IdType);
+const memo: Memo = await skald.getMemo({ memoId: '550e8400-e29b-41d4-a716-446655440000' });
+const memoByRef: Memo = await skald.getMemo({ memoId: 'external-id-123', idType: 'reference_id' as IdType });
 
 // List memos with types
 const memos: ListMemosResponse = await skald.listMemos({ page: 1, page_size: 20 });
@@ -601,13 +614,13 @@ const updateData: UpdateMemoData = {
   title: 'Updated Title',
   metadata: { status: 'reviewed' }
 };
-const updateResponse: UpdateMemoResponse = await skald.updateMemo(
-  '550e8400-e29b-41d4-a716-446655440000',
+const updateResponse: UpdateMemoResponse = await skald.updateMemo({
+  memoId: '550e8400-e29b-41d4-a716-446655440000',
   updateData
-);
+});
 
 // Delete memo
-await skald.deleteMemo('550e8400-e29b-41d4-a716-446655440000');
+await skald.deleteMemo({ memoId: '550e8400-e29b-41d4-a716-446655440000' });
 
 // Upload a file
 import * as fs from 'fs';
@@ -622,7 +635,7 @@ const fileData: MemoFileData = {
 const uploadResponse: CreateMemoFromFileResponse = await skald.createMemoFromFile(fileData);
 
 // Check processing status
-const statusResponse: MemoStatusResponse = await skald.checkMemoStatus(uploadResponse.memo_uuid);
+const statusResponse: MemoStatusResponse = await skald.checkMemoStatus({ memoId: uploadResponse.memo_uuid });
 const status: MemoStatus = statusResponse.status; // 'processing' | 'processed' | 'error'
 
 // Search with filters and types

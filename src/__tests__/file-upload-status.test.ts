@@ -241,7 +241,7 @@ describe('Skald Client - File Upload and Status Features', () => {
         json: async () => mockStatus,
       });
 
-      const result = await skald.checkMemoStatus('550e8400-e29b-41d4-a716-446655440000');
+      const result = await skald.checkMemoStatus({ memoId: '550e8400-e29b-41d4-a716-446655440000' });
 
       expect(result).toEqual(mockStatus);
       expect(result.status).toBe('processing');
@@ -266,7 +266,7 @@ describe('Skald Client - File Upload and Status Features', () => {
         json: async () => mockStatus,
       });
 
-      const result = await skald.checkMemoStatus('test-uuid');
+      const result = await skald.checkMemoStatus({ memoId: 'test-uuid' });
 
       expect(result.status).toBe('processed');
       expect(result.error_reason).toBeUndefined();
@@ -283,7 +283,7 @@ describe('Skald Client - File Upload and Status Features', () => {
         json: async () => mockStatus,
       });
 
-      const result = await skald.checkMemoStatus('error-uuid');
+      const result = await skald.checkMemoStatus({ memoId: 'error-uuid' });
 
       expect(result.status).toBe('error');
       expect(result.error_reason).toBe('Failed to parse PDF: corrupted file');
@@ -299,7 +299,7 @@ describe('Skald Client - File Upload and Status Features', () => {
         json: async () => mockStatus,
       });
 
-      const result = await skald.checkMemoStatus('ref-123', 'reference_id');
+      const result = await skald.checkMemoStatus({ memoId: 'ref-123', idType: 'reference_id' });
 
       expect(result).toEqual(mockStatus);
       const callUrl = (global.fetch as jest.Mock).mock.calls[0][0];
@@ -317,7 +317,7 @@ describe('Skald Client - File Upload and Status Features', () => {
         json: async () => mockStatus,
       });
 
-      await skald.checkMemoStatus('ref/with/slashes', 'reference_id');
+      await skald.checkMemoStatus({ memoId: 'ref/with/slashes', idType: 'reference_id' });
 
       const callUrl = (global.fetch as jest.Mock).mock.calls[0][0];
       expect(callUrl).toContain('ref%2Fwith%2Fslashes');
@@ -326,7 +326,7 @@ describe('Skald Client - File Upload and Status Features', () => {
     it('should throw error for invalid idType', async () => {
       await expect(
         // @ts-expect-error Testing invalid idType
-        skald.checkMemoStatus('test-uuid', 'invalid_type')
+        skald.checkMemoStatus({ memoId: 'test-uuid', idType: 'invalid_type' })
       ).rejects.toThrow("Invalid idType: invalid_type. Must be 'memo_uuid' or 'reference_id'.");
     });
 
@@ -338,7 +338,7 @@ describe('Skald Client - File Upload and Status Features', () => {
       });
 
       await expect(
-        skald.checkMemoStatus('nonexistent-uuid')
+        skald.checkMemoStatus({ memoId: 'nonexistent-uuid' })
       ).rejects.toThrow('Skald API error (404): Memo not found');
     });
 
@@ -350,7 +350,7 @@ describe('Skald Client - File Upload and Status Features', () => {
       });
 
       await expect(
-        skald.checkMemoStatus('test-uuid')
+        skald.checkMemoStatus({ memoId: 'test-uuid' })
       ).rejects.toThrow('Skald API error (401): Unauthorized');
     });
 
@@ -360,7 +360,7 @@ describe('Skald Client - File Upload and Status Features', () => {
       );
 
       await expect(
-        skald.checkMemoStatus('test-uuid')
+        skald.checkMemoStatus({ memoId: 'test-uuid' })
       ).rejects.toThrow('Network error');
     });
   });
@@ -394,7 +394,7 @@ describe('Skald Client - File Upload and Status Features', () => {
         json: async () => ({ status: 'processing' }),
       });
 
-      const status1 = await skald.checkMemoStatus(uploadResult.memo_uuid);
+      const status1 = await skald.checkMemoStatus({ memoId: uploadResult.memo_uuid });
       expect(status1.status).toBe('processing');
 
       // Mock status check - processed
@@ -403,7 +403,7 @@ describe('Skald Client - File Upload and Status Features', () => {
         json: async () => ({ status: 'processed' }),
       });
 
-      const status2 = await skald.checkMemoStatus(uploadResult.memo_uuid);
+      const status2 = await skald.checkMemoStatus({ memoId: uploadResult.memo_uuid });
       expect(status2.status).toBe('processed');
     });
 
@@ -434,7 +434,7 @@ describe('Skald Client - File Upload and Status Features', () => {
         }),
       });
 
-      const status = await skald.checkMemoStatus(uploadResult.memo_uuid);
+      const status = await skald.checkMemoStatus({ memoId: uploadResult.memo_uuid });
       expect(status.status).toBe('error');
       expect(status.error_reason).toBe('Corrupted PDF file');
     });
