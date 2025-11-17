@@ -2,6 +2,8 @@
 
 Node.js client library for the Skald API.
 
+> Please note that Skald is evolving fast and we may ship breaking changes across **minor** versions.
+
 ## Installation
 
 ```bash

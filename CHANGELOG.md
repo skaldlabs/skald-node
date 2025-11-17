@@ -1,5 +1,6 @@
 # Changelog
 
+
 ## 0.3.2
 
 - Fixed `ChatStreamEvent` type
