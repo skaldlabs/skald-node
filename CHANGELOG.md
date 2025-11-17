@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+
+- Added support for configuring your RAG setup on `chat` and `streamedChat`
+- Added support for references 
+- Updated method signatures to follow more solid practices
 
 ## 0.3.2
 
