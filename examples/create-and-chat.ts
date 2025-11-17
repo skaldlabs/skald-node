@@ -99,7 +99,7 @@ December 10, 2025 at 2:00 PM
     while (attempts < maxAttempts) {
       attempts++;
 
-      const status = await skald.checkMemoStatus(createResult.memo_uuid);
+      const status = await skald.checkMemoStatus({ memoId: createResult.memo_uuid });
 
       if (status.status === 'processed') {
         console.log('✓ Processing complete!');
@@ -123,7 +123,7 @@ December 10, 2025 at 2:00 PM
 
     // Step 3: Retrieve the processed memo to see details
     console.log('\nStep 3: Retrieving processed memo...');
-    const memo = await skald.getMemo(createResult.memo_uuid);
+    const memo = await skald.getMemo({ memoId: createResult.memo_uuid });
 
     console.log('\n=== Processed Memo ===');
     console.log(`Title: ${memo.title}`);

@@ -39,7 +39,7 @@ describe('Skald Client - New Features', () => {
         json: async () => mockMemo,
       });
 
-      const result = await skald.getMemo('test-uuid');
+      const result = await skald.getMemo({ memoId: 'test-uuid' });
 
       expect(result).toEqual(mockMemo);
       expect(global.fetch).toHaveBeenCalledWith(
@@ -78,7 +78,7 @@ describe('Skald Client - New Features', () => {
         json: async () => mockMemo,
       });
 
-      const result = await skald.getMemo('ref-123', 'reference_id');
+      const result = await skald.getMemo({ memoId: 'ref-123', idType: 'reference_id' });
 
       expect(result).toEqual(mockMemo);
       const callUrl = (global.fetch as jest.Mock).mock.calls[0][0];
@@ -111,7 +111,7 @@ describe('Skald Client - New Features', () => {
         json: async () => mockMemo,
       });
 
-      await skald.getMemo('ref/with/slashes', 'reference_id');
+      await skald.getMemo({ memoId: 'ref/with/slashes', idType: 'reference_id' });
 
       const callUrl = (global.fetch as jest.Mock).mock.calls[0][0];
       expect(callUrl).toContain('ref%2Fwith%2Fslashes');
@@ -124,7 +124,7 @@ describe('Skald Client - New Features', () => {
         text: async () => 'Memo not found',
       });
 
-      await expect(skald.getMemo('nonexistent')).rejects.toThrow(
+      await expect(skald.getMemo({ memoId: 'nonexistent' })).rejects.toThrow(
         'Skald API error (404): Memo not found'
       );
     });
@@ -216,7 +216,7 @@ describe('Skald Client - New Features', () => {
         metadata: { status: 'reviewed' },
       };
 
-      const result = await skald.updateMemo('test-uuid', updateData);
+      const result = await skald.updateMemo({ memoId: 'test-uuid', updateData });
 
       expect(result).toEqual(mockResponse);
       expect(global.fetch).toHaveBeenCalledWith(
@@ -244,7 +244,7 @@ describe('Skald Client - New Features', () => {
         content: 'New content',
       };
 
-      await skald.updateMemo('ref-123', updateData, 'reference_id');
+      await skald.updateMemo({ memoId: 'ref-123', updateData, idType: 'reference_id' });
 
       const callUrl = (global.fetch as jest.Mock).mock.calls[0][0];
       expect(callUrl).toContain('id_type=reference_id');
@@ -268,7 +268,7 @@ describe('Skald Client - New Features', () => {
         expiration_date: '2025-12-31T23:59:59Z',
       };
 
-      await skald.updateMemo('test-uuid', updateData);
+      await skald.updateMemo({ memoId: 'test-uuid', updateData });
 
       const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
       expect(callBody).toEqual(updateData);
@@ -282,7 +282,7 @@ describe('Skald Client - New Features', () => {
       });
 
       await expect(
-        skald.updateMemo('test-uuid', { title: 'New' })
+        skald.updateMemo({ memoId: 'test-uuid', updateData: { title: 'New' } })
       ).rejects.toThrow('Skald API error (403): Access denied');
     });
   });
@@ -294,8 +294,9 @@ describe('Skald Client - New Features', () => {
         status: 204,
       });
 
-      await skald.deleteMemo('test-uuid');
+      const result = await skald.deleteMemo({ memoId: 'test-uuid' });
 
+      expect(result).toEqual({ ok: true });
       expect(global.fetch).toHaveBeenCalledWith(
         `${mockBaseUrl}/api/v1/memo/test-uuid`,
         {
@@ -313,8 +314,9 @@ describe('Skald Client - New Features', () => {
         status: 204,
       });
 
-      await skald.deleteMemo('ref-123', 'reference_id');
+      const result = await skald.deleteMemo({ memoId: 'ref-123', idType: 'reference_id' });
 
+      expect(result).toEqual({ ok: true });
       const callUrl = (global.fetch as jest.Mock).mock.calls[0][0];
       expect(callUrl).toContain('id_type=reference_id');
       expect(callUrl).toContain('/api/v1/memo/ref-123');
@@ -327,7 +329,7 @@ describe('Skald Client - New Features', () => {
         text: async () => 'Memo not found',
       });
 
-      await expect(skald.deleteMemo('nonexistent')).rejects.toThrow(
+      await expect(skald.deleteMemo({ memoId: 'nonexistent' })).rejects.toThrow(
         'Skald API error (404): Memo not found'
       );
     });
@@ -339,7 +341,7 @@ describe('Skald Client - New Features', () => {
         text: async () => 'Resource does not belong to the project',
       });
 
-      await expect(skald.deleteMemo('test-uuid')).rejects.toThrow(
+      await expect(skald.deleteMemo({ memoId: 'test-uuid' })).rejects.toThrow(
         'Skald API error (403): Resource does not belong to the project'
       );
     });
@@ -614,6 +616,711 @@ describe('Skald Client - New Features', () => {
         expect(callBody.filters[0].operator).toBe('in');
         expect(Array.isArray(callBody.filters[0].value)).toBe(true);
         expect(callBody.filters[0].value).toHaveLength(3);
+      });
+    });
+  });
+
+  describe('RAG config support', () => {
+    describe('chat with rag_config', () => {
+      it('should send rag_config with all properties', async () => {
+        const mockResponse = {
+          ok: true,
+          response: 'Answer with references [[1]]',
+          intermediate_steps: [],
+          chat_id: 'chat-123',
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        const result = await skald.chat({
+          query: 'What is this?',
+          rag_config: {
+            llmProvider: 'anthropic',
+            queryRewrite: {
+              enabled: true,
+            },
+            vectorSearch: {
+              topK: 150,
+              similarityThreshold: 0.7,
+            },
+            reranking: {
+              enabled: true,
+              topK: 30,
+            },
+            references: {
+              enabled: true,
+            },
+          },
+        });
+
+        expect(result).toEqual(mockResponse);
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.rag_config).toBeDefined();
+        expect(callBody.rag_config.llmProvider).toBe('anthropic');
+        expect(callBody.rag_config.queryRewrite.enabled).toBe(true);
+        expect(callBody.rag_config.vectorSearch.topK).toBe(150);
+        expect(callBody.rag_config.vectorSearch.similarityThreshold).toBe(0.7);
+        expect(callBody.rag_config.reranking.enabled).toBe(true);
+        expect(callBody.rag_config.reranking.topK).toBe(30);
+        expect(callBody.rag_config.references.enabled).toBe(true);
+      });
+
+      it('should send partial rag_config', async () => {
+        const mockResponse = {
+          ok: true,
+          response: 'Answer',
+          intermediate_steps: [],
+          chat_id: 'chat-123',
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.chat({
+          query: 'What is this?',
+          rag_config: {
+            llmProvider: 'openai',
+            reranking: {
+              enabled: false,
+              topK: 20,
+            },
+          },
+        });
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.rag_config).toBeDefined();
+        expect(callBody.rag_config.llmProvider).toBe('openai');
+        expect(callBody.rag_config.reranking.enabled).toBe(false);
+        expect(callBody.rag_config.reranking.topK).toBe(20);
+        expect(callBody.rag_config.queryRewrite).toBeUndefined();
+        expect(callBody.rag_config.vectorSearch).toBeUndefined();
+      });
+
+      it('should work without rag_config', async () => {
+        const mockResponse = {
+          ok: true,
+          response: 'Answer',
+          intermediate_steps: [],
+          chat_id: 'chat-123',
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.chat({
+          query: 'What is this?',
+        });
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.rag_config).toBeUndefined();
+      });
+
+      it('should combine rag_config with filters and system_prompt', async () => {
+        const mockResponse = {
+          ok: true,
+          response: 'Answer',
+          intermediate_steps: [],
+          chat_id: 'chat-123',
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.chat({
+          query: 'What are best practices?',
+          system_prompt: 'You are a helpful assistant.',
+          filters: [
+            {
+              field: 'source',
+              operator: 'eq',
+              value: 'docs',
+              filter_type: 'native_field',
+            },
+          ],
+          rag_config: {
+            llmProvider: 'groq',
+            vectorSearch: {
+              topK: 100,
+              similarityThreshold: 0.8,
+            },
+          },
+        });
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.query).toBe('What are best practices?');
+        expect(callBody.system_prompt).toBe('You are a helpful assistant.');
+        expect(callBody.filters).toHaveLength(1);
+        expect(callBody.rag_config).toBeDefined();
+        expect(callBody.rag_config.llmProvider).toBe('groq');
+      });
+
+      it('should support all LLM providers', async () => {
+        const mockResponse = {
+          ok: true,
+          response: 'Answer',
+          intermediate_steps: [],
+          chat_id: 'chat-123',
+        };
+
+        const providers: Array<'openai' | 'anthropic' | 'groq'> = ['openai', 'anthropic', 'groq'];
+
+        for (const provider of providers) {
+          (global.fetch as jest.Mock).mockResolvedValueOnce({
+            ok: true,
+            json: async () => mockResponse,
+          });
+
+          await skald.chat({
+            query: 'test',
+            rag_config: {
+              llmProvider: provider,
+            },
+          });
+
+          const calls = (global.fetch as jest.Mock).mock.calls;
+          const callBody = JSON.parse(calls[calls.length - 1][1].body);
+          expect(callBody.rag_config.llmProvider).toBe(provider);
+        }
+      });
+    });
+
+    describe('streamedChat with rag_config', () => {
+      it('should send rag_config with streaming', async () => {
+        const mockStreamData = `data: {"type":"token","content":"test"}\ndata: {"type":"done","chat_id":"chat-123"}\n`;
+
+        const mockReader = {
+          read: jest
+            .fn()
+            .mockResolvedValueOnce({
+              done: false,
+              value: new TextEncoder().encode(mockStreamData),
+            })
+            .mockResolvedValueOnce({
+              done: true,
+              value: undefined,
+            }),
+          releaseLock: jest.fn(),
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          body: {
+            getReader: () => mockReader,
+          },
+        });
+
+        const events = [];
+        for await (const event of skald.streamedChat({
+          query: 'test',
+          rag_config: {
+            llmProvider: 'anthropic',
+            queryRewrite: {
+              enabled: false,
+            },
+            vectorSearch: {
+              topK: 80,
+              similarityThreshold: 0.9,
+            },
+            reranking: {
+              enabled: true,
+              topK: 40,
+            },
+          },
+        })) {
+          events.push(event);
+        }
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.rag_config).toBeDefined();
+        expect(callBody.rag_config.llmProvider).toBe('anthropic');
+        expect(callBody.rag_config.queryRewrite.enabled).toBe(false);
+        expect(callBody.rag_config.vectorSearch.topK).toBe(80);
+        expect(callBody.stream).toBe(true);
+        expect(events).toHaveLength(2);
+      });
+
+      it('should stream without rag_config', async () => {
+        const mockStreamData = `data: {"type":"token","content":"test"}\ndata: {"type":"done"}\n`;
+
+        const mockReader = {
+          read: jest
+            .fn()
+            .mockResolvedValueOnce({
+              done: false,
+              value: new TextEncoder().encode(mockStreamData),
+            })
+            .mockResolvedValueOnce({
+              done: true,
+              value: undefined,
+            }),
+          releaseLock: jest.fn(),
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          body: {
+            getReader: () => mockReader,
+          },
+        });
+
+        const events = [];
+        for await (const event of skald.streamedChat({
+          query: 'test',
+        })) {
+          events.push(event);
+        }
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.rag_config).toBeUndefined();
+        expect(callBody.stream).toBe(true);
+      });
+    });
+
+    describe('references support', () => {
+      describe('chat with references', () => {
+        it('should return references object when enabled', async () => {
+          const mockResponse = {
+            ok: true,
+            response: 'The system uses API keys [[1]] and supports RBAC [[2]].',
+            intermediate_steps: [],
+            chat_id: 'chat-123',
+            references: {
+              '1': {
+                memo_uuid: '123e4567-e89b-12d3-a456-426614174000',
+                memo_title: 'API Authentication Guide',
+              },
+              '2': {
+                memo_uuid: '223e4567-e89b-12d3-a456-426614174001',
+                memo_title: 'Role-Based Access Control',
+              },
+            },
+          };
+
+          (global.fetch as jest.Mock).mockResolvedValueOnce({
+            ok: true,
+            json: async () => mockResponse,
+          });
+
+          const result = await skald.chat({
+            query: 'What is the main topic?',
+            rag_config: {
+              references: {
+                enabled: true,
+              },
+            },
+          });
+
+          expect(result.references).toBeDefined();
+          expect(result.references).toEqual(mockResponse.references);
+          expect(result.references!['1'].memo_uuid).toBe('123e4567-e89b-12d3-a456-426614174000');
+          expect(result.references!['1'].memo_title).toBe('API Authentication Guide');
+          expect(result.references!['2'].memo_uuid).toBe('223e4567-e89b-12d3-a456-426614174001');
+          expect(result.references!['2'].memo_title).toBe('Role-Based Access Control');
+          expect(result.response).toContain('[[1]]');
+          expect(result.response).toContain('[[2]]');
+        });
+
+        it('should not return references when disabled', async () => {
+          const mockResponse = {
+            ok: true,
+            response: 'Answer without references',
+            intermediate_steps: [],
+            chat_id: 'chat-123',
+          };
+
+          (global.fetch as jest.Mock).mockResolvedValueOnce({
+            ok: true,
+            json: async () => mockResponse,
+          });
+
+          const result = await skald.chat({
+            query: 'What is this?',
+            rag_config: {
+              references: {
+                enabled: false,
+              },
+            },
+          });
+
+          expect(result.references).toBeUndefined();
+        });
+
+        it('should not return references when rag_config is not provided', async () => {
+          const mockResponse = {
+            ok: true,
+            response: 'Answer',
+            intermediate_steps: [],
+            chat_id: 'chat-123',
+          };
+
+          (global.fetch as jest.Mock).mockResolvedValueOnce({
+            ok: true,
+            json: async () => mockResponse,
+          });
+
+          const result = await skald.chat({
+            query: 'What is this?',
+          });
+
+          expect(result.references).toBeUndefined();
+        });
+
+        it('should handle empty references object', async () => {
+          const mockResponse = {
+            ok: true,
+            response: 'Answer with no citations',
+            intermediate_steps: [],
+            chat_id: 'chat-123',
+            references: {},
+          };
+
+          (global.fetch as jest.Mock).mockResolvedValueOnce({
+            ok: true,
+            json: async () => mockResponse,
+          });
+
+          const result = await skald.chat({
+            query: 'What is this?',
+            rag_config: {
+              references: {
+                enabled: true,
+              },
+            },
+          });
+
+          expect(result.references).toBeDefined();
+          expect(result.references).toEqual({});
+          expect(Object.keys(result.references!)).toHaveLength(0);
+        });
+
+        it('should handle multiple references with same memo', async () => {
+          const mockResponse = {
+            ok: true,
+            response: 'Security includes audits [[1]], encryption [[2]], and MFA [[1]][[3]].',
+            intermediate_steps: [],
+            chat_id: 'chat-123',
+            references: {
+              '1': {
+                memo_uuid: '123e4567-e89b-12d3-a456-426614174000',
+                memo_title: 'Security Audit Procedures',
+              },
+              '2': {
+                memo_uuid: '223e4567-e89b-12d3-a456-426614174001',
+                memo_title: 'Data Encryption Standards',
+              },
+              '3': {
+                memo_uuid: '323e4567-e89b-12d3-a456-426614174002',
+                memo_title: 'Authentication Setup Guide',
+              },
+            },
+          };
+
+          (global.fetch as jest.Mock).mockResolvedValueOnce({
+            ok: true,
+            json: async () => mockResponse,
+          });
+
+          const result = await skald.chat({
+            query: 'What are security practices?',
+            rag_config: {
+              references: {
+                enabled: true,
+              },
+            },
+          });
+
+          expect(result.references).toBeDefined();
+          expect(Object.keys(result.references!)).toHaveLength(3);
+          expect(result.response).toContain('[[1]]');
+          expect(result.response).toContain('[[2]]');
+          expect(result.response).toContain('[[3]]');
+        });
+      });
+
+      describe('streamedChat with references', () => {
+        it('should emit references event when enabled', async () => {
+          const referencesData = {
+            '1': {
+              memo_uuid: '123e4567-e89b-12d3-a456-426614174000',
+              memo_title: 'API Authentication Guide',
+            },
+            '2': {
+              memo_uuid: '223e4567-e89b-12d3-a456-426614174001',
+              memo_title: 'Role-Based Access Control',
+            },
+          };
+
+          const mockStreamData =
+            `data: {"type":"token","content":"The system"}\n` +
+            `data: {"type":"token","content":" uses"}\n` +
+            `data: {"type":"token","content":" [[1]]"}\n` +
+            `data: {"type":"references","content":"${JSON.stringify(referencesData).replace(/"/g, '\\"')}"}\n` +
+            `data: {"type":"done","chat_id":"chat-123"}\n`;
+
+          const mockReader = {
+            read: jest
+              .fn()
+              .mockResolvedValueOnce({
+                done: false,
+                value: new TextEncoder().encode(mockStreamData),
+              })
+              .mockResolvedValueOnce({
+                done: true,
+                value: undefined,
+              }),
+            releaseLock: jest.fn(),
+          };
+
+          (global.fetch as jest.Mock).mockResolvedValueOnce({
+            ok: true,
+            body: {
+              getReader: () => mockReader,
+            },
+          });
+
+          const events = [];
+          for await (const event of skald.streamedChat({
+            query: 'What is the main topic?',
+            rag_config: {
+              references: {
+                enabled: true,
+              },
+            },
+          })) {
+            events.push(event);
+          }
+
+          expect(events).toHaveLength(5);
+          expect(events[0]).toEqual({ type: 'token', content: 'The system' });
+          expect(events[1]).toEqual({ type: 'token', content: ' uses' });
+          expect(events[2]).toEqual({ type: 'token', content: ' [[1]]' });
+          expect(events[3].type).toBe('references');
+          
+          // Parse and verify references content
+          const parsedReferences = JSON.parse(events[3].content!);
+          expect(parsedReferences).toEqual(referencesData);
+          expect(parsedReferences['1'].memo_uuid).toBe('123e4567-e89b-12d3-a456-426614174000');
+          expect(parsedReferences['1'].memo_title).toBe('API Authentication Guide');
+          
+          expect(events[4]).toEqual({ type: 'done', chat_id: 'chat-123' });
+        });
+
+        it('should not emit references event when disabled', async () => {
+          const mockStreamData =
+            `data: {"type":"token","content":"test"}\n` +
+            `data: {"type":"done","chat_id":"chat-123"}\n`;
+
+          const mockReader = {
+            read: jest
+              .fn()
+              .mockResolvedValueOnce({
+                done: false,
+                value: new TextEncoder().encode(mockStreamData),
+              })
+              .mockResolvedValueOnce({
+                done: true,
+                value: undefined,
+              }),
+            releaseLock: jest.fn(),
+          };
+
+          (global.fetch as jest.Mock).mockResolvedValueOnce({
+            ok: true,
+            body: {
+              getReader: () => mockReader,
+            },
+          });
+
+          const events = [];
+          for await (const event of skald.streamedChat({
+            query: 'test',
+            rag_config: {
+              references: {
+                enabled: false,
+              },
+            },
+          })) {
+            events.push(event);
+          }
+
+          expect(events).toHaveLength(2);
+          expect(events.every((e) => e.type !== 'references')).toBe(true);
+        });
+
+        it('should handle references event order correctly', async () => {
+          const referencesData = {
+            '1': {
+              memo_uuid: '123e4567-e89b-12d3-a456-426614174000',
+              memo_title: 'Test Memo',
+            },
+          };
+
+          // References should come after all tokens but before done
+          const mockStreamData =
+            `data: {"type":"token","content":"Token 1"}\n` +
+            `data: {"type":"token","content":"Token 2"}\n` +
+            `data: {"type":"references","content":"${JSON.stringify(referencesData).replace(/"/g, '\\"')}"}\n` +
+            `data: {"type":"done","chat_id":"chat-123"}\n`;
+
+          const mockReader = {
+            read: jest
+              .fn()
+              .mockResolvedValueOnce({
+                done: false,
+                value: new TextEncoder().encode(mockStreamData),
+              })
+              .mockResolvedValueOnce({
+                done: true,
+                value: undefined,
+              }),
+            releaseLock: jest.fn(),
+          };
+
+          (global.fetch as jest.Mock).mockResolvedValueOnce({
+            ok: true,
+            body: {
+              getReader: () => mockReader,
+            },
+          });
+
+          const events = [];
+          for await (const event of skald.streamedChat({
+            query: 'test',
+            rag_config: {
+              references: {
+                enabled: true,
+              },
+            },
+          })) {
+            events.push(event);
+          }
+
+          expect(events).toHaveLength(4);
+          expect(events[0].type).toBe('token');
+          expect(events[1].type).toBe('token');
+          expect(events[2].type).toBe('references');
+          expect(events[3].type).toBe('done');
+        });
+      });
+    });
+
+    describe('rag_config edge cases', () => {
+      it('should handle empty rag_config object', async () => {
+        const mockResponse = {
+          ok: true,
+          response: 'Answer',
+          intermediate_steps: [],
+          chat_id: 'chat-123',
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.chat({
+          query: 'test',
+          rag_config: {},
+        });
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.rag_config).toEqual({});
+      });
+
+      it('should handle only references config', async () => {
+        const mockResponse = {
+          ok: true,
+          response: 'Answer [[1]]',
+          intermediate_steps: [],
+          chat_id: 'chat-123',
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.chat({
+          query: 'test',
+          rag_config: {
+            references: {
+              enabled: true,
+            },
+          },
+        });
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.rag_config.references.enabled).toBe(true);
+      });
+
+      it('should handle boundary values for vectorSearch', async () => {
+        const mockResponse = {
+          ok: true,
+          response: 'Answer',
+          intermediate_steps: [],
+          chat_id: 'chat-123',
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.chat({
+          query: 'test',
+          rag_config: {
+            vectorSearch: {
+              topK: 1,
+              similarityThreshold: 0.0,
+            },
+          },
+        });
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.rag_config.vectorSearch.topK).toBe(1);
+        expect(callBody.rag_config.vectorSearch.similarityThreshold).toBe(0.0);
+      });
+
+      it('should handle maximum boundary values', async () => {
+        const mockResponse = {
+          ok: true,
+          response: 'Answer',
+          intermediate_steps: [],
+          chat_id: 'chat-123',
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.chat({
+          query: 'test',
+          rag_config: {
+            vectorSearch: {
+              topK: 200,
+              similarityThreshold: 1.0,
+            },
+            reranking: {
+              enabled: true,
+              topK: 100,
+            },
+          },
+        });
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.rag_config.vectorSearch.topK).toBe(200);
+        expect(callBody.rag_config.vectorSearch.similarityThreshold).toBe(1.0);
+        expect(callBody.rag_config.reranking.topK).toBe(100);
       });
     });
   });

@@ -67,14 +67,14 @@ async function uploadAndWaitForProcessing() {
     while (attempts < maxAttempts) {
       attempts++;
 
-      const status = await skald.checkMemoStatus(uploadResult.memo_uuid);
+      const status = await skald.checkMemoStatus({ memoId: uploadResult.memo_uuid });
 
       if (status.status === 'processed') {
         console.log('✓ Processing complete!');
 
         // Step 3: Retrieve the processed memo
         console.log('\nStep 3: Retrieving processed memo...');
-        const memo = await skald.getMemo(uploadResult.memo_uuid);
+        const memo = await skald.getMemo({ memoId: uploadResult.memo_uuid });
 
         console.log('\n=== Processed Memo ===');
         console.log(`Title: ${memo.title}`);

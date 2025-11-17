@@ -38,20 +38,36 @@ export interface MemoStatusResponse {
   error_reason?: string;
 }
 
-export interface UpdateMemoData {
-  title?: string;
-  content?: string;
-  metadata?: Record<string, any>;
-  client_reference_id?: string;
-  source?: string;
-  expiration_date?: string;
-}
-
 export interface UpdateMemoResponse {
   ok: boolean;
 }
 
+export interface DeleteMemoResponse {
+  ok: boolean;
+}
+
 export type IdType = 'memo_uuid' | 'reference_id';
+
+export interface GetMemoRequest {
+  memoId: string;
+  idType?: IdType;
+}
+
+export interface UpdateMemoRequest {
+  memoId: string;
+  updateData: Partial<MemoData>;
+  idType?: IdType;
+}
+
+export interface DeleteMemoRequest {
+  memoId: string;
+  idType?: IdType;
+}
+
+export interface CheckMemoStatusRequest {
+  memoId: string;
+  idType?: IdType;
+}
 
 export interface MemoTag {
   uuid: string;
@@ -142,22 +158,62 @@ export interface SearchResponse {
   }>;
 }
 
+export type LLMProvider = 'openai' | 'anthropic' | 'groq';
+
+export interface QueryRewriteConfig {
+  enabled: boolean;
+}
+
+export interface VectorSearchConfig {
+  topK: number;
+  similarityThreshold: number;
+}
+
+export interface RerankingConfig {
+  enabled: boolean;
+  topK: number;
+}
+
+export interface ReferencesConfig {
+  enabled: boolean;
+}
+
+export interface RAGConfig {
+  llmProvider?: LLMProvider;
+  queryRewrite?: QueryRewriteConfig;
+  vectorSearch?: VectorSearchConfig;
+  reranking?: RerankingConfig;
+  references?: ReferencesConfig;
+}
+
 export interface ChatRequest {
   query: string;
   stream?: boolean;
   system_prompt?: string;
   filters?: Filter[];
   chat_id?: string;
+  rag_config?: RAGConfig;
+}
+
+export interface MemoReference {
+  memo_uuid: string;
+  memo_title: string;
+}
+
+export interface References {
+  [key: string]: MemoReference;
 }
 
 export interface ChatResponse {
   ok: boolean;
   response: string;
   intermediate_steps: any[];
+  chat_id: string;
+  references?: References;
 }
 
 export interface ChatStreamEvent {
-  type: 'token' | 'done';
+  type: 'token' | 'done' | 'references';
   content?: string;
   chat_id?: string;
 }
@@ -227,8 +283,9 @@ export class Skald {
   /**
    * Get a memo by UUID or reference ID.
    *
-   * @param memoId - The memo UUID or client reference ID
-   * @param idType - The type of identifier ('memo_uuid' or 'reference_id', default: 'memo_uuid')
+   * @param request - The request parameters
+   * @param request.memoId - The memo UUID or client reference ID
+   * @param request.idType - The type of identifier ('memo_uuid' or 'reference_id', default: 'memo_uuid')
    *
    * @returns Promise resolving to memo details with content, summary, tags, and chunks
    * @throws Error if the API request fails with status code and error message
@@ -236,13 +293,15 @@ export class Skald {
    * @example
    * ```typescript
    * // Get by UUID
-   * const memo = await skald.getMemo('550e8400-e29b-41d4-a716-446655440000');
+   * const memo = await skald.getMemo({ memoId: '550e8400-e29b-41d4-a716-446655440000' });
    *
    * // Get by reference ID
-   * const memo = await skald.getMemo('external-id-123', 'reference_id');
+   * const memo = await skald.getMemo({ memoId: 'external-id-123', idType: 'reference_id' });
    * ```
    */
-  async getMemo(memoId: string, idType: IdType = 'memo_uuid'): Promise<Memo> {
+  async getMemo(request: GetMemoRequest): Promise<Memo> {
+    const { memoId, idType = 'memo_uuid' } = request;
+    
     if (idType !== 'memo_uuid' && idType !== 'reference_id') {
       throw new Error(`Invalid idType: ${idType}. Must be 'memo_uuid' or 'reference_id'.`);
     }
@@ -318,9 +377,10 @@ export class Skald {
    * Update an existing memo by UUID or reference ID. If content is updated,
    * the memo will be reprocessed (summary, tags, chunks regenerated).
    *
-   * @param memoId - The memo UUID or client reference ID
-   * @param updateData - The fields to update (all optional)
-   * @param idType - The type of identifier ('memo_uuid' or 'reference_id', default: 'memo_uuid')
+   * @param request - The request parameters
+   * @param request.memoId - The memo UUID or client reference ID
+   * @param request.updateData - The fields to update (all optional)
+   * @param request.idType - The type of identifier ('memo_uuid' or 'reference_id', default: 'memo_uuid')
    *
    * @returns Promise resolving to { ok: true } on success
    * @throws Error if the API request fails with status code and error message
@@ -328,22 +388,27 @@ export class Skald {
    * @example
    * ```typescript
    * // Update by UUID
-   * await skald.updateMemo('550e8400-e29b-41d4-a716-446655440000', {
-   *   title: 'Updated Title',
-   *   metadata: { status: 'reviewed' }
+   * await skald.updateMemo({
+   *   memoId: '550e8400-e29b-41d4-a716-446655440000',
+   *   updateData: {
+   *     title: 'Updated Title',
+   *     metadata: { status: 'reviewed' }
+   *   }
    * });
    *
    * // Update by reference ID and trigger reprocessing
-   * await skald.updateMemo('external-id-123', {
-   *   content: 'New content that will be reprocessed'
-   * }, 'reference_id');
+   * await skald.updateMemo({
+   *   memoId: 'external-id-123',
+   *   updateData: {
+   *     content: 'New content that will be reprocessed'
+   *   },
+   *   idType: 'reference_id'
+   * });
    * ```
    */
-  async updateMemo(
-    memoId: string,
-    updateData: UpdateMemoData,
-    idType: IdType = 'memo_uuid'
-  ): Promise<UpdateMemoResponse> {
+  async updateMemo(request: UpdateMemoRequest): Promise<UpdateMemoResponse> {
+    const { memoId, updateData, idType = 'memo_uuid' } = request;
+    
     if (idType !== 'memo_uuid' && idType !== 'reference_id') {
       throw new Error(`Invalid idType: ${idType}. Must be 'memo_uuid' or 'reference_id'.`);
     }
@@ -374,22 +439,25 @@ export class Skald {
    * Delete a memo by UUID or reference ID. This permanently deletes the memo
    * and all associated data (content, summary, tags, chunks).
    *
-   * @param memoId - The memo UUID or client reference ID
-   * @param idType - The type of identifier ('memo_uuid' or 'reference_id', default: 'memo_uuid')
+   * @param request - The request parameters
+   * @param request.memoId - The memo UUID or client reference ID
+   * @param request.idType - The type of identifier ('memo_uuid' or 'reference_id', default: 'memo_uuid')
    *
-   * @returns Promise resolving when deletion is complete
+   * @returns Promise resolving to { ok: true } when deletion is complete
    * @throws Error if the API request fails with status code and error message
    *
    * @example
    * ```typescript
    * // Delete by UUID
-   * await skald.deleteMemo('550e8400-e29b-41d4-a716-446655440000');
+   * await skald.deleteMemo({ memoId: '550e8400-e29b-41d4-a716-446655440000' });
    *
    * // Delete by reference ID
-   * await skald.deleteMemo('external-id-123', 'reference_id');
+   * await skald.deleteMemo({ memoId: 'external-id-123', idType: 'reference_id' });
    * ```
    */
-  async deleteMemo(memoId: string, idType: IdType = 'memo_uuid'): Promise<void> {
+  async deleteMemo(request: DeleteMemoRequest): Promise<DeleteMemoResponse> {
+    const { memoId, idType = 'memo_uuid' } = request;
+    
     if (idType !== 'memo_uuid' && idType !== 'reference_id') {
       throw new Error(`Invalid idType: ${idType}. Must be 'memo_uuid' or 'reference_id'.`);
     }
@@ -410,6 +478,8 @@ export class Skald {
       const errorText = await response.text();
       throw new Error(`Skald API error (${response.status}): ${errorText}`);
     }
+
+    return { ok: true };
   }
 
   /**
@@ -718,8 +788,9 @@ export class Skald {
    * Check the processing status of a memo by UUID or reference ID.
    * Use this to monitor asynchronous processing of uploaded files or created memos.
    *
-   * @param memoId - The memo UUID or client reference ID
-   * @param idType - The type of identifier ('memo_uuid' or 'reference_id', default: 'memo_uuid')
+   * @param request - The request parameters
+   * @param request.memoId - The memo UUID or client reference ID
+   * @param request.idType - The type of identifier ('memo_uuid' or 'reference_id', default: 'memo_uuid')
    *
    * @returns Promise resolving to status response with processing state and optional error reason
    * @throws Error if the API request fails with status code and error message
@@ -727,7 +798,7 @@ export class Skald {
    * @example
    * ```typescript
    * // Check status by UUID
-   * const status = await skald.checkMemoStatus('550e8400-e29b-41d4-a716-446655440000');
+   * const status = await skald.checkMemoStatus({ memoId: '550e8400-e29b-41d4-a716-446655440000' });
    * console.log(status.status); // 'processing' | 'processed' | 'error'
    *
    * if (status.status === 'error') {
@@ -735,11 +806,11 @@ export class Skald {
    * }
    *
    * // Check by reference ID
-   * const status2 = await skald.checkMemoStatus('my-ref-id', 'reference_id');
+   * const status2 = await skald.checkMemoStatus({ memoId: 'my-ref-id', idType: 'reference_id' });
    *
    * // Poll until processing completes
    * while (true) {
-   *   const status = await skald.checkMemoStatus(memoUuid);
+   *   const status = await skald.checkMemoStatus({ memoId: memoUuid });
    *   if (status.status === 'processed') {
    *     console.log('Processing complete!');
    *     break;
@@ -751,7 +822,9 @@ export class Skald {
    * }
    * ```
    */
-  async checkMemoStatus(memoId: string, idType: IdType = 'memo_uuid'): Promise<MemoStatusResponse> {
+  async checkMemoStatus(request: CheckMemoStatusRequest): Promise<MemoStatusResponse> {
+    const { memoId, idType = 'memo_uuid' } = request;
+    
     if (idType !== 'memo_uuid' && idType !== 'reference_id') {
       throw new Error(`Invalid idType: ${idType}. Must be 'memo_uuid' or 'reference_id'.`);
     }

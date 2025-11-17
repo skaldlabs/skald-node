@@ -26,7 +26,7 @@ async function checkStatus(memoUuid: string) {
   try {
     console.log(`Checking status for memo: ${memoUuid}`);
 
-    const status = await skald.checkMemoStatus(memoUuid);
+    const status = await skald.checkMemoStatus({ memoId: memoUuid });
 
     console.log(`Status: ${status.status}`);
 

@@ -81,7 +81,7 @@ const result = await skald.createMemoFromFile({
 console.log(result); // { ok: true, memo_uuid: '550e8400-e29b-41d4-a716-446655440000' }
 
 // Poll for processing status
-const status = await skald.checkMemoStatus(result.memo_uuid);
+const status = await skald.checkMemoStatus({ memoId: result.memo_uuid });
 console.log(status.status); // 'processing' | 'processed' | 'error'
 ```
 
@@ -109,7 +109,7 @@ Monitor the processing status of a memo, especially useful after uploading files
 
 ```javascript
 // Check status by UUID
-const status = await skald.checkMemoStatus('550e8400-e29b-41d4-a716-446655440000');
+const status = await skald.checkMemoStatus({ memoId: '550e8400-e29b-41d4-a716-446655440000' });
 console.log(status.status); // 'processing' | 'processed' | 'error'
 
 if (status.status === 'error') {
@@ -117,11 +117,11 @@ if (status.status === 'error') {
 }
 
 // Check by reference ID
-const status2 = await skald.checkMemoStatus('external-id-123', 'reference_id');
+const status2 = await skald.checkMemoStatus({ memoId: 'external-id-123', idType: 'reference_id' });
 
 // Poll until processing completes
 while (true) {
-  const status = await skald.checkMemoStatus(memoUuid);
+  const status = await skald.checkMemoStatus({ memoId: memoUuid });
 
   if (status.status === 'processed') {
     console.log('Processing complete!');
@@ -142,6 +142,7 @@ while (true) {
 - `error` - An error occurred during processing, check `error_reason` for details
 
 **Parameters:**
+Takes a request object with the following properties:
 - `memoId` (string, required) - The memo UUID or client reference ID
 - `idType` (string, optional) - Either `'memo_uuid'` or `'reference_id'` (default: `'memo_uuid'`)
 
@@ -151,10 +152,10 @@ Retrieve a memo by its UUID or your reference ID:
 
 ```javascript
 // Get by UUID
-const memo = await skald.getMemo('550e8400-e29b-41d4-a716-446655440000');
+const memo = await skald.getMemo({ memoId: '550e8400-e29b-41d4-a716-446655440000' });
 
 // Get by reference ID
-const memo = await skald.getMemo('external-id-123', 'reference_id');
+const memo = await skald.getMemo({ memoId: 'external-id-123', idType: 'reference_id' });
 
 console.log(memo.title);
 console.log(memo.content);
@@ -191,15 +192,22 @@ Update an existing memo by UUID or reference ID:
 
 ```javascript
 // Update by UUID
-await skald.updateMemo('550e8400-e29b-41d4-a716-446655440000', {
-  title: 'Updated Title',
-  metadata: { status: 'reviewed' }
+await skald.updateMemo({
+  memoId: '550e8400-e29b-41d4-a716-446655440000',
+  updateData: {
+    title: 'Updated Title',
+    metadata: { status: 'reviewed' }
+  }
 });
 
 // Update by reference ID and trigger reprocessing
-await skald.updateMemo('external-id-123', {
-  content: 'New content that will be reprocessed'
-}, 'reference_id');
+await skald.updateMemo({
+  memoId: 'external-id-123',
+  updateData: {
+    content: 'New content that will be reprocessed'
+  },
+  idType: 'reference_id'
+});
 ```
 
 **Note:** When you update the `content` field, the memo will be automatically reprocessed (summary, tags, and chunks regenerated).
@@ -218,10 +226,10 @@ Permanently delete a memo and all associated data:
 
 ```javascript
 // Delete by UUID
-await skald.deleteMemo('550e8400-e29b-41d4-a716-446655440000');
+await skald.deleteMemo({ memoId: '550e8400-e29b-41d4-a716-446655440000' });
 
 // Delete by reference ID
-await skald.deleteMemo('external-id-123', 'reference_id');
+await skald.deleteMemo({ memoId: 'external-id-123', idType: 'reference_id' });
 ```
 
 **Warning:** This operation permanently deletes the memo and all related data (content, summary, tags, chunks) and cannot be undone.
@@ -310,6 +318,16 @@ console.log(result.response);
 // 3. Product roadmap [[1]][[3]]"
 
 console.log(result.ok); // true
+console.log(result.chat_id); // '550e8400-e29b-41d4-a716-446655440000'
+
+// Continue the conversation by passing the chat_id
+const followUp = await skald.chat({
+  query: 'What were the revenue targets?',
+  chat_id: result.chat_id  // Maintains conversation context
+});
+
+console.log(followUp.response);
+// "Based on the Q1 meeting notes, the revenue targets were... [[1]]"
 ```
 
 #### Streaming Chat
@@ -317,6 +335,8 @@ console.log(result.ok); // true
 For real-time responses, use streaming chat:
 
 ```javascript
+let chatId;
+
 const stream = skald.streamedChat({
   query: 'What are our quarterly goals?'
 });
@@ -324,6 +344,22 @@ const stream = skald.streamedChat({
 for await (const event of stream) {
   if (event.type === 'token') {
     // Write each token as it arrives
+    process.stdout.write(event.content);
+  } else if (event.type === 'done') {
+    // Capture the chat_id for continuing the conversation
+    chatId = event.chat_id;
+    console.log('\nDone!');
+  }
+}
+
+// Continue the conversation with the captured chat_id
+const followUpStream = skald.streamedChat({
+  query: 'Can you elaborate on the first goal?',
+  chat_id: chatId  // Maintains conversation context
+});
+
+for await (const event of followUpStream) {
+  if (event.type === 'token') {
     process.stdout.write(event.content);
   } else if (event.type === 'done') {
     console.log('\nDone!');
@@ -334,21 +370,133 @@ for await (const event of stream) {
 #### Chat Parameters
 
 - `query` (string, required) - The question to ask
+- `chat_id` (string, optional) - Chat ID to continue an existing conversation. When provided, the AI will have context from previous messages in the same conversation
 - `system_prompt` (string, optional) - A system prompt to guide the AI's behavior
 - `filters` (array, optional) - Array of filter objects to focus chat context on specific sources (see Filters section below)
+- `rag_config` (object, optional) - Advanced RAG (Retrieval-Augmented Generation) configuration to customize the search and retrieval behavior (see RAG Configuration section below)
 - `project_id` (string, optional) - Project UUID (required when using Token Authentication)
 
 
 #### Chat Response
 
+**Non-Streaming Response:**
+
 Non-streaming responses include:
 - `ok` (boolean) - Success status
-- `response` (string) - The AI's answer with inline citations in format `[[N]]`
+- `response` (string) - The AI's answer with inline citations in format `[[N]]` (e.g., `[[1]]`, `[[2]]`)
+- `chat_id` (string) - Unique identifier for this conversation. Use this to continue the conversation with follow-up questions
 - `intermediate_steps` (array) - Steps taken by the agent (for debugging)
+- `references` (object, optional) - Mapping of citation numbers to memo information (only included when `rag_config.references.enabled` is `true`)
+
+**Streaming Response:**
 
 Streaming responses yield events:
 - `{ type: 'token', content: string }` - Each text token as it's generated
-- `{ type: 'done' }` - Indicates the stream has finished
+- `{ type: 'references', content: string }` - JSON string containing the references object (only sent when `rag_config.references.enabled` is `true`)
+- `{ type: 'done', chat_id: string }` - Indicates the stream has finished and includes the chat_id for continuing the conversation
+
+#### Understanding References
+
+When you enable references in your RAG config (`rag_config.references.enabled: true`), the chat response will include inline citations and a references object that maps citation numbers to the source memos.
+
+**Citation Format:**
+
+The AI's response will include citations in the format `[[N]]` where N is a number (e.g., `[[1]]`, `[[2]]`, `[[3]]`). These citations appear inline in the response text to indicate which source memos support specific statements.
+
+**References Object Structure:**
+
+```typescript
+interface References {
+  [key: string]: {
+    memo_uuid: string;    // UUID of the referenced memo
+    memo_title: string;   // Title of the referenced memo
+  };
+}
+```
+
+**Non-Streaming Example with References:**
+
+```javascript
+const result = await skald.chat({
+  query: 'What is the main topic discussed in the documentation?',
+  rag_config: {
+    references: {
+      enabled: true
+    }
+  }
+});
+
+console.log(result.response);
+// "Based on the documentation, the main topic is about API authentication 
+// and authorization. The system uses API keys for authentication [[1]], 
+// and supports role-based access control [[2]]. For more details on 
+// implementation, see the security guide [[3]]."
+
+console.log(result.references);
+// {
+//   "1": {
+//     "memo_uuid": "123e4567-e89b-12d3-a456-426614174000",
+//     "memo_title": "API Authentication Guide"
+//   },
+//   "2": {
+//     "memo_uuid": "223e4567-e89b-12d3-a456-426614174001",
+//     "memo_title": "Role-Based Access Control"
+//   },
+//   "3": {
+//     "memo_uuid": "323e4567-e89b-12d3-a456-426614174002",
+//     "memo_title": "Security Best Practices"
+//   }
+// }
+```
+
+**Streaming Example with References:**
+
+```javascript
+let fullResponse = '';
+let references = {};
+
+const stream = skald.streamedChat({
+  query: 'What are our security best practices?',
+  rag_config: {
+    references: {
+      enabled: true
+    }
+  }
+});
+
+for await (const event of stream) {
+  if (event.type === 'token') {
+    // Accumulate response text with citations
+    fullResponse += event.content;
+    process.stdout.write(event.content);
+  } else if (event.type === 'references') {
+    // Parse references object
+    references = JSON.parse(event.content);
+    console.log('\nReferences:', references);
+  } else if (event.type === 'done') {
+    console.log('\nChat ID:', event.chat_id);
+  }
+}
+
+// Example output:
+// fullResponse: "Our security practices include regular audits [[1]], 
+// encryption at rest [[2]], and multi-factor authentication [[1]][[3]]."
+//
+// references: {
+//   "1": { 
+//     "memo_uuid": "123e4567-...", 
+//     "memo_title": "Security Audit Procedures" 
+//   },
+//   "2": { 
+//     "memo_uuid": "223e4567-...", 
+//     "memo_title": "Data Encryption Standards" 
+//   },
+//   "3": { 
+//     "memo_uuid": "323e4567-...", 
+//     "memo_title": "Authentication Setup Guide" 
+//   }
+// }
+```
 
 
 ### Filters
@@ -505,6 +653,296 @@ const doc = await skald.generateDoc({
 });
 ```
 
+### RAG Configuration
+
+The `rag_config` parameter allows you to customize the Retrieval-Augmented Generation (RAG) behavior for chat operations. This gives you fine-grained control over how documents are retrieved, ranked, and used to generate responses.
+
+#### RAG Config Structure
+
+```typescript
+interface RAGConfig {
+  llmProvider?: 'openai' | 'anthropic' | 'groq';
+  queryRewrite?: {
+    enabled: boolean;
+  };
+  vectorSearch?: {
+    topK: number;              // 1-200
+    similarityThreshold: number; // 0.0-1.0
+  };
+  reranking?: {
+    enabled: boolean;
+    topK: number;              // 1-100
+  };
+  references?: {
+    enabled: boolean;
+  };
+}
+```
+
+#### RAG Config Options
+
+**`llmProvider`** (string, optional)
+- Specifies which LLM provider to use for generating responses
+- Options: `'openai'`, `'anthropic'`, `'groq'`
+- Defaults to your project's configured provider
+
+**`queryRewrite`** (object, optional)
+- `enabled` (boolean) - Whether to rewrite the user's query for better retrieval
+- Query rewriting can improve search results by reformulating vague queries
+- Default: `false`
+
+**`vectorSearch`** (object, optional)
+- `topK` (number, 1-200) - How many chunks to retrieve from vector search
+- `similarityThreshold` (number, 0.0-1.0) - Minimum similarity score (0 = most similar)
+- Lower similarity thresholds are more restrictive
+- Default: `topK: 100`, `similarityThreshold: 0.8`
+
+**`reranking`** (object, optional)
+- `enabled` (boolean) - Whether to rerank search results for better relevance
+- `topK` (number, 1-100) - How many top results to keep after reranking (must be ≤ vectorSearch.topK)
+- Reranking uses a more sophisticated model to order results by relevance
+- Default: `enabled: true`, `topK: 50`
+
+**`references`** (object, optional)
+- `enabled` (boolean) - Whether to include inline citations in the response (e.g., `[[1]]`, `[[2]]`)
+- Default: `false`
+
+#### Basic RAG Config Examples
+
+**Enable References with Citations:**
+
+```javascript
+const result = await skald.chat({
+  query: 'What are our security best practices?',
+  rag_config: {
+    references: {
+      enabled: true
+    }
+  }
+});
+
+console.log(result.response);
+// "Our security practices include: 1) Regular audits [[1]], 
+// 2) Encryption at rest [[2]], and 3) Multi-factor authentication [[1]][[3]]"
+```
+
+**Customize Vector Search Parameters:**
+
+```javascript
+const result = await skald.chat({
+  query: 'Tell me about our product roadmap',
+  rag_config: {
+    vectorSearch: {
+      topK: 150,                  // Retrieve more chunks
+      similarityThreshold: 0.7    // Be less restrictive
+    },
+    reranking: {
+      enabled: true,
+      topK: 30                    // Keep top 30 after reranking
+    }
+  }
+});
+```
+
+**Use a Specific LLM Provider:**
+
+```javascript
+const result = await skald.chat({
+  query: 'Summarize our Q4 goals',
+  rag_config: {
+    llmProvider: 'anthropic',    // Use Claude
+    references: {
+      enabled: true
+    }
+  }
+});
+```
+
+**Enable Query Rewriting for Better Results:**
+
+```javascript
+const result = await skald.chat({
+  query: 'how do we handle that thing with customers?',  // Vague query
+  rag_config: {
+    queryRewrite: {
+      enabled: true  // AI will reformulate this into a clearer query
+    },
+    vectorSearch: {
+      topK: 100,
+      similarityThreshold: 0.8
+    }
+  }
+});
+```
+
+**Disable Reranking for Faster Responses:**
+
+```javascript
+const result = await skald.chat({
+  query: 'What is our company mission?',
+  rag_config: {
+    reranking: {
+      enabled: false,  // Skip reranking for faster response
+      topK: 50
+    }
+  }
+});
+```
+
+#### Advanced RAG Config Examples
+
+**Fine-tune All RAG Parameters:**
+
+```javascript
+const result = await skald.chat({
+  query: 'What security measures do we have in place?',
+  system_prompt: 'You are a security expert. Provide detailed, technical answers.',
+  rag_config: {
+    llmProvider: 'anthropic',
+    queryRewrite: {
+      enabled: true
+    },
+    vectorSearch: {
+      topK: 200,                  // Maximum retrieval
+      similarityThreshold: 0.6    // Cast a wider net
+    },
+    reranking: {
+      enabled: true,
+      topK: 50                    // Keep top 50 most relevant
+    },
+    references: {
+      enabled: true               // Include citations
+    }
+  },
+  filters: [
+    {
+      field: 'tags',
+      operator: 'in',
+      value: ['security', 'compliance'],
+      filter_type: 'native_field'
+    }
+  ]
+});
+```
+
+**Streaming Chat with RAG Config:**
+
+```javascript
+const stream = skald.streamedChat({
+  query: 'Explain our data processing pipeline',
+  rag_config: {
+    llmProvider: 'groq',        // Use Groq for fast streaming
+    vectorSearch: {
+      topK: 120,
+      similarityThreshold: 0.75
+    },
+    reranking: {
+      enabled: true,
+      topK: 40
+    },
+    references: {
+      enabled: true
+    }
+  }
+});
+
+for await (const event of stream) {
+  if (event.type === 'token') {
+    process.stdout.write(event.content);
+  } else if (event.type === 'done') {
+    console.log('\nChat ID:', event.chat_id);
+  }
+}
+```
+
+**Optimize for Precision (Narrow, Focused Results):**
+
+```javascript
+const result = await skald.chat({
+  query: 'What is the exact version number of our API?',
+  rag_config: {
+    vectorSearch: {
+      topK: 50,                   // Fewer chunks
+      similarityThreshold: 0.9    // Very strict matching
+    },
+    reranking: {
+      enabled: true,
+      topK: 10                    // Only keep top 10
+    }
+  }
+});
+```
+
+**Optimize for Recall (Broad, Comprehensive Results):**
+
+```javascript
+const result = await skald.chat({
+  query: 'Tell me everything about our customer onboarding process',
+  rag_config: {
+    vectorSearch: {
+      topK: 200,                  // Maximum chunks
+      similarityThreshold: 0.5    // More permissive
+    },
+    reranking: {
+      enabled: true,
+      topK: 80                    // Keep more results
+    }
+  }
+});
+```
+
+#### RAG Config Best Practices
+
+1. **Start with defaults**: The default settings work well for most use cases. Only customize when you have specific needs.
+
+2. **Enable references for transparency**: If you need to verify information or provide source attribution, enable `references.enabled: true`.
+
+3. **Balance topK values**: 
+   - Higher `vectorSearch.topK` = more comprehensive but slower
+   - Ensure `reranking.topK` ≤ `vectorSearch.topK`
+   - Typical range: vectorSearch 80-150, reranking 30-60
+
+4. **Adjust similarity threshold based on need**:
+   - Strict matching (0.9-1.0): Use when you need exact information
+   - Balanced (0.7-0.8): Good default for most queries
+   - Broad matching (0.5-0.6): Use for exploratory or vague queries
+
+5. **Use query rewriting for user-facing applications**: Enable `queryRewrite.enabled: true` when users might provide unclear or ambiguous queries.
+
+6. **Choose LLM provider based on requirements**:
+   - `anthropic` (Claude): Great for nuanced understanding and longer context
+   - `openai` (GPT): Fast and reliable for most use cases
+   - `groq`: Optimized for speed with streaming responses
+
+#### TypeScript Support for RAG Config
+
+```typescript
+import { Skald, RAGConfig, LLMProvider } from '@skald-labs/skald-node';
+
+const ragConfig: RAGConfig = {
+  llmProvider: 'anthropic' as LLMProvider,
+  queryRewrite: {
+    enabled: true
+  },
+  vectorSearch: {
+    topK: 150,
+    similarityThreshold: 0.75
+  },
+  reranking: {
+    enabled: true,
+    topK: 50
+  },
+  references: {
+    enabled: true
+  }
+};
+
+const result = await skald.chat({
+  query: 'What are our company values?',
+  rag_config: ragConfig
+});
+```
+
 ### Error Handling
 
 ```javascript
@@ -536,7 +974,12 @@ import {
   ListMemosResponse,
   UpdateMemoData,
   UpdateMemoResponse,
+  DeleteMemoResponse,
   IdType,
+  GetMemoRequest,
+  UpdateMemoRequest,
+  DeleteMemoRequest,
+  CheckMemoStatusRequest,
   Filter,
   FilterOperator,
   FilterType,
@@ -544,7 +987,15 @@ import {
   SearchResponse,
   ChatRequest,
   ChatResponse,
-  ChatStreamEvent
+  ChatStreamEvent,
+  RAGConfig,
+  LLMProvider,
+  QueryRewriteConfig,
+  VectorSearchConfig,
+  RerankingConfig,
+  ReferencesConfig,
+  MemoReference,
+  References
 } from '@skald-labs/skald-node';
 
 const skald = new Skald('your-api-key-here');
@@ -560,8 +1011,8 @@ const memoData: MemoData = {
 const createResponse: CreateMemoResponse = await skald.createMemo(memoData);
 
 // Get memo with types
-const memo: Memo = await skald.getMemo('550e8400-e29b-41d4-a716-446655440000');
-const memoByRef: Memo = await skald.getMemo('external-id-123', 'reference_id' as IdType);
+const memo: Memo = await skald.getMemo({ memoId: '550e8400-e29b-41d4-a716-446655440000' });
+const memoByRef: Memo = await skald.getMemo({ memoId: 'external-id-123', idType: 'reference_id' as IdType });
 
 // List memos with types
 const memos: ListMemosResponse = await skald.listMemos({ page: 1, page_size: 20 });
@@ -571,13 +1022,13 @@ const updateData: UpdateMemoData = {
   title: 'Updated Title',
   metadata: { status: 'reviewed' }
 };
-const updateResponse: UpdateMemoResponse = await skald.updateMemo(
-  '550e8400-e29b-41d4-a716-446655440000',
+const updateResponse: UpdateMemoResponse = await skald.updateMemo({
+  memoId: '550e8400-e29b-41d4-a716-446655440000',
   updateData
-);
+});
 
 // Delete memo
-await skald.deleteMemo('550e8400-e29b-41d4-a716-446655440000');
+await skald.deleteMemo({ memoId: '550e8400-e29b-41d4-a716-446655440000' });
 
 // Upload a file
 import * as fs from 'fs';
@@ -592,7 +1043,7 @@ const fileData: MemoFileData = {
 const uploadResponse: CreateMemoFromFileResponse = await skald.createMemoFromFile(fileData);
 
 // Check processing status
-const statusResponse: MemoStatusResponse = await skald.checkMemoStatus(uploadResponse.memo_uuid);
+const statusResponse: MemoStatusResponse = await skald.checkMemoStatus({ memoId: uploadResponse.memo_uuid });
 const status: MemoStatus = statusResponse.status; // 'processing' | 'processed' | 'error'
 
 // Search with filters and types
@@ -635,6 +1086,53 @@ for await (const event of stream) {
   const typedEvent: ChatStreamEvent = event;
   if (typedEvent.type === 'token') {
     process.stdout.write(typedEvent.content || '');
+  }
+}
+
+// Chat with references and types
+const chatWithRefs: ChatResponse = await skald.chat({
+  query: 'What are our security best practices?',
+  rag_config: {
+    references: {
+      enabled: true
+    }
+  }
+});
+
+console.log(chatWithRefs.response); // Response with [[1]], [[2]], etc.
+
+if (chatWithRefs.references) {
+  const refs: References = chatWithRefs.references;
+  Object.entries(refs).forEach(([num, ref]) => {
+    const memoRef: MemoReference = ref;
+    console.log(`[${num}] ${memoRef.memo_title} (${memoRef.memo_uuid})`);
+  });
+}
+
+// Streaming chat with references and types
+let fullResponse = '';
+let streamedRefs: References | undefined;
+
+const streamWithRefs = skald.streamedChat({
+  query: 'Explain our authentication system',
+  rag_config: {
+    references: {
+      enabled: true
+    }
+  }
+});
+
+for await (const event of streamWithRefs) {
+  const typedEvent: ChatStreamEvent = event;
+  
+  if (typedEvent.type === 'token') {
+    fullResponse += typedEvent.content || '';
+    process.stdout.write(typedEvent.content || '');
+  } else if (typedEvent.type === 'references') {
+    streamedRefs = JSON.parse(typedEvent.content || '{}') as References;
+    console.log('\nReferences received:', Object.keys(streamedRefs).length);
+  } else if (typedEvent.type === 'done') {
+    console.log('\nChat completed:', typedEvent.chat_id);
   }
 }
 
