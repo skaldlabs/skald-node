@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0
+
+- Added support for creating memos with scopes
+- Added support for chat and search scope filtering
+
 ## 0.4.0
 
 - Added support for configuring your RAG setup on `chat` and `streamedChat`
