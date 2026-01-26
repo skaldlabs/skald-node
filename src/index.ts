@@ -10,6 +10,7 @@ export interface MemoData {
   tags?: string[];
   source?: string;
   expiration_date?: string;
+  scopes?: Record<string, string>;
 }
 
 export interface CreateMemoResponse {
@@ -24,6 +25,7 @@ export interface MemoFileData {
   metadata?: Record<string, any>;
   tags?: string[];
   source?: string;
+  scopes?: Record<string, string>;
 }
 
 export interface CreateMemoFromFileResponse {
@@ -89,6 +91,7 @@ export interface Memo {
   summary: string;
   content_length: number;
   metadata: Record<string, any>;
+  scopes: Record<string, string> | null;
   client_reference_id: string | null;
   source: string | null;
   type: string;
@@ -131,7 +134,7 @@ export type FilterOperator =
   | 'in'
   | 'not_in';
 
-export type FilterType = 'native_field' | 'custom_metadata';
+export type FilterType = 'native_field' | 'custom_metadata' | 'scope';
 
 export interface Filter {
   field: string;
@@ -145,6 +148,7 @@ export interface SearchRequest {
   query: string;
   limit?: number;
   filters?: Filter[];
+  scopes?: Record<string, string>;
 }
 
 export interface SearchResponse {
@@ -190,6 +194,7 @@ export interface ChatRequest {
   query: string;
   stream?: boolean;
   system_prompt?: string;
+  scopes?: Record<string, string>;
   filters?: Filter[];
   chat_id?: string;
   rag_config?: RAGConfig;
@@ -242,6 +247,7 @@ export class Skald {
    * @param memoData.reference_id - Optional external reference ID (max 255 characters, used for linking Skald memos to IDs on your side)
    * @param memoData.tags - Optional array of tags for categorization and filtering
    * @param memoData.source - Optional source system name (max 255 characters, e.g., "notion", "confluence", "email")
+   * @param memoData.scopes - Optional key-value pairs for access control scopes (used for filtering retrieval)
    *
    * @returns Promise resolving to { memo_uuid: string } containing the UUID of the created memo
    * @throws Error if the API request fails with status code and error message
@@ -253,7 +259,8 @@ export class Skald {
    *   content: 'Discussion about Q1 roadmap...',
    *   metadata: { type: 'notes', author: 'John Doe' },
    *   tags: ['meeting', 'q1'],
-   *   source: 'notion'
+   *   source: 'notion',
+   *   scopes: { department: 'engineering', team: 'backend' }
    * });
    * console.log(result.memo_uuid); // '550e8400-e29b-41d4-a716-446655440000'
    * ```
@@ -519,10 +526,39 @@ export class Skald {
    *     }
    *   ]
    * });
+   *
+   * // Search with scope filtering
+   * const scoped = await skald.search({
+   *   query: 'deployment guide',
+   *   filters: [
+   *     {
+   *       field: 'department',
+   *       operator: 'eq',
+   *       value: 'engineering',
+   *       filter_type: 'scope'
+   *     }
+   *   ]
+   * });
    * ```
    */
   async search(searchParams: SearchRequest): Promise<SearchResponse> {
     const url = `${this.baseUrl}/api/v1/search`;
+
+    if (searchParams.scopes) {
+      searchParams = {
+        ...searchParams,
+        filters: [
+          ...(searchParams.filters || []),
+          ...Object.entries(searchParams.scopes).map(([key, value]) => ({
+            field: key,
+            operator: 'eq' as FilterOperator,
+            value: value,
+            filter_type: 'scope' as FilterType,
+          })),
+
+        ]
+      }
+    }
     
     const response = await fetch(url, {
       method: 'POST',
@@ -546,6 +582,7 @@ export class Skald {
    *
    * @param chatParams - The chat parameters
    * @param chatParams.query - The question to ask (required)
+   * @param chatParams.scopes - Optional key-value pairs for access control scopes (used for filtering retrieval)
    * @param chatParams.chat_id - Optional chat ID to continue a conversation
    * @param chatParams.system_prompt - Optional system prompt to guide the AI's behavior
    * @param chatParams.filters - Optional array of filters to narrow the search context
@@ -580,6 +617,12 @@ export class Skald {
    *   ]
    * });
    *
+   * // Chat with scopes to focus on specific departments
+   * const scoped = await skald.chat({
+   *   query: 'What are our security practices?',
+   *   scopes: { department: 'engineering' }
+   * });
+   *
    * console.log(result);
    * // "The main points discussed in the Q1 meeting were:
    * // 1. Revenue targets [[1]]
@@ -588,6 +631,22 @@ export class Skald {
    */
   async chat(chatParams: Omit<ChatRequest, 'stream'>): Promise<ChatResponse> {
     const url = `${this.baseUrl}/api/v1/chat`;
+
+
+    if (chatParams.scopes) {
+      chatParams = {
+        ...chatParams,
+        filters: [
+          ...(chatParams.filters || []),
+          ...Object.entries(chatParams.scopes).map(([key, value]) => ({
+            field: key,
+            operator: 'eq' as FilterOperator,
+            value: value,
+            filter_type: 'scope' as FilterType,
+          })),
+        ]
+      }
+    }
 
     const response = await fetch(url, {
       method: 'POST',
@@ -652,7 +711,24 @@ export class Skald {
     chatParams: Omit<ChatRequest, 'stream'>,
   ): AsyncGenerator<ChatStreamEvent> {
     const url = `${this.baseUrl}/api/v1/chat`;
-    
+
+    // Convert scopes shorthand to filters
+    if (chatParams.scopes) {
+      chatParams = {
+        ...chatParams,
+        filters: [
+          ...(chatParams.filters || []),
+          ...Object.entries(chatParams.scopes).map(([key, value]) => ({
+            field: key,
+            operator: 'eq' as FilterOperator,
+            value: value,
+            filter_type: 'scope' as FilterType,
+          })),
+        ],
+      };
+      delete (chatParams as any).scopes;
+    }
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -723,6 +799,7 @@ export class Skald {
    * @param fileData.metadata - Optional custom JSON metadata
    * @param fileData.tags - Optional array of tags for categorization
    * @param fileData.source - Optional source system name (max 255 characters)
+   * @param fileData.scopes - Optional key-value pairs for access control scopes (used for filtering retrieval)
    *
    * @returns Promise resolving to { ok: true, memo_uuid: string } with the UUID for status tracking
    * @throws Error if the API request fails with status code and error message
@@ -737,7 +814,8 @@ export class Skald {
    *   filename: 'document.pdf',
    *   metadata: { type: 'report', department: 'engineering' },
    *   tags: ['report', '2024'],
-   *   source: 'google-drive'
+   *   source: 'google-drive',
+   *   scopes: { department: 'engineering', access_level: 'internal' }
    * });
    * console.log(result.memo_uuid); // '550e8400-e29b-41d4-a716-446655440000'
    *
@@ -766,6 +844,9 @@ export class Skald {
     }
     if (fileData.source) {
       formData.append('source', fileData.source);
+    }
+    if (fileData.scopes) {
+      formData.append('scopes', JSON.stringify(fileData.scopes));
     }
 
     const response = await fetch(url, {

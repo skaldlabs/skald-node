@@ -1324,4 +1324,242 @@ describe('Skald Client - New Features', () => {
       });
     });
   });
+
+  describe('scopes support', () => {
+    describe('createMemo with scopes', () => {
+      it('should create memo with scopes', async () => {
+        const mockResponse = { memo_uuid: 'test-uuid' };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.createMemo({
+          title: 'Test Memo',
+          content: 'Test content',
+          scopes: { department: 'engineering', team: 'backend' },
+        });
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.scopes).toEqual({ department: 'engineering', team: 'backend' });
+      });
+
+      it('should create memo without scopes', async () => {
+        const mockResponse = { memo_uuid: 'test-uuid' };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.createMemo({
+          title: 'Test Memo',
+          content: 'Test content',
+        });
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.scopes).toBeUndefined();
+      });
+    });
+
+    describe('createMemoFromFile with scopes', () => {
+      it('should create file memo with scopes', async () => {
+        const mockResponse = { ok: true, memo_uuid: 'test-uuid' };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.createMemoFromFile({
+          file: Buffer.from('test content'),
+          filename: 'test.pdf',
+          scopes: { access_level: 'internal', region: 'us-east' },
+        });
+
+        const callArgs = (global.fetch as jest.Mock).mock.calls[0];
+        const formData = callArgs[1].body as FormData;
+        expect(formData.get('scopes')).toBe(JSON.stringify({ access_level: 'internal', region: 'us-east' }));
+      });
+
+      it('should create file memo without scopes', async () => {
+        const mockResponse = { ok: true, memo_uuid: 'test-uuid' };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.createMemoFromFile({
+          file: Buffer.from('test content'),
+          filename: 'test.pdf',
+        });
+
+        const callArgs = (global.fetch as jest.Mock).mock.calls[0];
+        const formData = callArgs[1].body as FormData;
+        expect(formData.get('scopes')).toBeNull();
+      });
+    });
+
+    describe('search with scope filter', () => {
+      it('should search with scope filter', async () => {
+        const mockResponse = { results: [] };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.search({
+          query: 'test',
+          filters: [
+            {
+              field: 'department',
+              operator: 'eq',
+              value: 'engineering',
+              filter_type: 'scope',
+            },
+          ],
+        });
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.filters).toHaveLength(1);
+        expect(callBody.filters[0]).toEqual({
+          field: 'department',
+          operator: 'eq',
+          value: 'engineering',
+          filter_type: 'scope',
+        });
+      });
+
+      it('should search with multiple scope filters', async () => {
+        const mockResponse = { results: [] };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.search({
+          query: 'test',
+          filters: [
+            {
+              field: 'department',
+              operator: 'eq',
+              value: 'engineering',
+              filter_type: 'scope',
+            },
+            {
+              field: 'team',
+              operator: 'eq',
+              value: 'backend',
+              filter_type: 'scope',
+            },
+          ],
+        });
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.filters).toHaveLength(2);
+        expect(callBody.filters[0].filter_type).toBe('scope');
+        expect(callBody.filters[1].filter_type).toBe('scope');
+      });
+    });
+
+    describe('chat with scope filter', () => {
+      it('should chat with scope filter', async () => {
+        const mockResponse = {
+          ok: true,
+          response: 'Answer',
+          intermediate_steps: [],
+          chat_id: 'chat-123',
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await skald.chat({
+          query: 'What is this?',
+          filters: [
+            {
+              field: 'department',
+              operator: 'eq',
+              value: 'engineering',
+              filter_type: 'scope',
+            },
+          ],
+        });
+
+        const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+        expect(callBody.filters).toHaveLength(1);
+        expect(callBody.filters[0].filter_type).toBe('scope');
+      });
+    });
+
+    describe('getMemo with scopes', () => {
+      it('should return memo with scopes', async () => {
+        const mockMemo = {
+          uuid: 'test-uuid',
+          created_at: '2024-01-15T10:30:00Z',
+          updated_at: '2024-01-15T10:30:00Z',
+          title: 'Test Memo',
+          content: 'Test content',
+          summary: 'Test summary',
+          content_length: 1234,
+          metadata: {},
+          scopes: { department: 'engineering', team: 'backend' },
+          client_reference_id: null,
+          source: null,
+          type: 'document',
+          expiration_date: null,
+          archived: false,
+          pending: false,
+          tags: [],
+          chunks: [],
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockMemo,
+        });
+
+        const result = await skald.getMemo({ memoId: 'test-uuid' });
+
+        expect(result.scopes).toEqual({ department: 'engineering', team: 'backend' });
+      });
+
+      it('should return memo with null scopes', async () => {
+        const mockMemo = {
+          uuid: 'test-uuid',
+          created_at: '2024-01-15T10:30:00Z',
+          updated_at: '2024-01-15T10:30:00Z',
+          title: 'Test Memo',
+          content: 'Test content',
+          summary: 'Test summary',
+          content_length: 1234,
+          metadata: {},
+          scopes: null,
+          client_reference_id: null,
+          source: null,
+          type: 'document',
+          expiration_date: null,
+          archived: false,
+          pending: false,
+          tags: [],
+          chunks: [],
+        };
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockMemo,
+        });
+
+        const result = await skald.getMemo({ memoId: 'test-uuid' });
+
+        expect(result.scopes).toBeNull();
+      });
+    });
+  });
 });
